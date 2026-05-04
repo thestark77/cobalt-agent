@@ -1,9 +1,10 @@
 """Cobalt Routing Plugin v0.4.0 - Model routing + Tool Guard + Skill Injection for Hermes Agent.
 
-Three enforcement mechanisms via a single pre_tool_call hook:
-1. TOOL GUARD: Blocks forbidden tools at orchestrator level (mechanical enforcement)
-2. MODEL ROUTING: Injects _routed_model into delegate_task based on task_type
-3. SKILL INJECTION: Instructs sub-agents to load relevant skills via skill_view
+Four enforcement mechanisms via hooks:
+1. TOOL GUARD: Blocks forbidden tools at orchestrator level (pre_tool_call)
+2. MODEL ROUTING: Injects _routed_model into delegate_task (pre_tool_call)
+3. SKILL INJECTION: Instructs sub-agents to load relevant skills (pre_tool_call)
+4. SDD TRIAGE: Forces orchestrator to classify and select SDD phases (pre_llm_call)
 
 Requires source patch in delegate_tool.py for _routed_model fields.
 """
@@ -251,8 +252,12 @@ def register(ctx):
         emoji="⚡",
     )
 
-    # Register unified pre_tool_call hook (guard + routing)
+    # Register unified pre_tool_call hook (guard + routing + skills)
     ctx.register_hook("pre_tool_call", _pre_tool_call_hook)
+
+    # Register SDD triage hook (mandatory classification before model responds)
+    from sdd_triage import pre_llm_call_hook
+    ctx.register_hook("pre_llm_call", pre_llm_call_hook)
 
     # Try eager schema patch
     if not _patch_delegate_schema():

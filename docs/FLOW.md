@@ -159,12 +159,23 @@ Located at `~/.hermes/SOUL.md`. Loaded every turn. Must be <800 tokens.
 
 Key rules:
 1. ABSOLUTE RULE: Never call execution tools directly
-2. ALWAYS honcho_search before delegating
-3. ALWAYS set task_type on every delegation
-4. ALWAYS maximize parallelism for independent tasks
-5. ALWAYS include WHY in goals (sub-agent needs context to curate response)
-6. ALWAYS honcho_conclude after completing work
-7. Respond in user's language
+2. MANDATORY TRIAGE (Step 0): Before ANY work, decide if SDD applies and WHICH phases
+3. ALWAYS honcho_search before delegating
+4. ALWAYS set task_type on every delegation
+5. ALWAYS maximize parallelism for independent tasks
+6. ALWAYS include WHY in goals (sub-agent needs context to curate response)
+7. ALWAYS honcho_conclude after completing work
+8. Respond in user's language
+
+### SDD Triage Rules:
+- Conversation/question/opinion → respond directly, no SDD
+- Execution task → apply SDD with selected phases
+- Simple (single file, clear requirements): Explore → Apply → Verify → Archive
+- Medium (multiple concerns, unclear): Explore → Propose → Tasks → Apply → Verify → Archive
+- Complex (architecture, multi-file, ambiguous): ALL 9 phases
+- If unsure → ASK the user which phases before starting
+- Bias: apply MORE phases rather than fewer
+- Propose = present plan and WAIT for user approval before executing
 
 ---
 
