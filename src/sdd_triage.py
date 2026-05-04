@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 _TRIAGE_INJECTION = """
 [MANDATORY TRIAGE — respond to this BEFORE any delegation or action]
+
+STEP 0: Call honcho_search with the user's topic to check for relevant prior context.
+
 Classify this request:
 1. CONVERSATION (question/opinion/clarification/feedback) → Respond directly, no delegation needed.
 2. EXECUTION TASK → State which SDD phases you will apply:
@@ -24,13 +27,17 @@ Classify this request:
    - Design (architecture/technical decisions)
    - Tasks (atomic breakdown via todo)
    - Apply (write/modify code)
-   - Verify (test/validate)
-   - Archive (save learnings to memory)
+   - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
+   - Archive (save learnings via honcho_conclude)
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
 If the scope is unclear or complex, ask the user which phases to apply.
 Bias: apply MORE phases rather than fewer for any non-trivial task.
+
+CRITICAL RULES:
+- Verify must be its OWN separate delegate_task call. Never ask the Apply sub-agent to also verify.
+- Always call honcho_conclude at the end (Archive phase).
 """
 
 _STEERING_INJECTION = """

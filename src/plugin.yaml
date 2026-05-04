@@ -1,8 +1,9 @@
 name: cobalt-routing
-version: 0.3.0
-description: Per-task model routing + orchestrator tool guard for delegate_task
-author: cobalt-agent
+version: 0.7.0
+description: Autonomous model routing, tool guard, skill injection, SDD triage for Hermes Agent
+author: thestark77
 requires_hermes: ">=0.12.0,<1.0.0"
 homepage: https://github.com/thestark77/cobalt-agent
 provides_hooks:
   - pre_tool_call
+  - pre_llm_call

@@ -1,8 +1,9 @@
-"""Cobalt Routing — Model resolution from presets with multi-provider support."""
+"""Cobalt Routing - Model resolution from presets with multi-provider support."""
 
 import logging
+import os
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,9 +11,28 @@ _presets: Dict[str, Any] = {}
 _active_preset: str = "economy"
 _provider_cache: Dict[str, Dict[str, Any]] = {}
 
+_TIMEOUT_PER_TYPE: Dict[str, int] = {
+    "scout": 300,
+    "explore": 300,
+    "summarize": 300,
+    "apply": 600,
+    "archive": 600,
+    "design": 900,
+    "spec": 900,
+    "tasks": 900,
+    "verify": 900,
+    "propose": 900,
+}
+
+
+def apply_dynamic_timeout(task_type: str) -> None:
+    """Set per-task timeout via env var before delegation."""
+    timeout = _TIMEOUT_PER_TYPE.get(task_type, 600)
+    os.environ["DELEGATION_CHILD_TIMEOUT_SECONDS"] = str(timeout)
+    logger.info("cobalt-routing: timeout set to %ds for task_type=%s", timeout, task_type)
+
 
 def load_presets() -> None:
-    """Load presets from presets.yaml."""
     global _presets, _active_preset
     try:
         import yaml
@@ -29,36 +49,28 @@ def load_presets() -> None:
         data = yaml.safe_load(presets_path.read_text(encoding="utf-8"))
         _presets = data.get("presets", {})
         _active_preset = data.get("active", "economy")
-        logger.info(
-            "cobalt-routing: %d presets loaded, active='%s'",
-            len(_presets), _active_preset
-        )
+        logger.info("cobalt-routing: %d presets loaded, active=%s", len(_presets), _active_preset)
     except Exception as e:
         logger.error("cobalt-routing: failed to load presets: %s", e)
 
 
 def _resolve_provider_creds(provider_name: str) -> Optional[Dict[str, Any]]:
-    """Resolve credentials for a provider using Hermes runtime."""
     if provider_name in _provider_cache:
         return _provider_cache[provider_name]
-
     try:
         from hermes_cli.runtime_provider import resolve_runtime_provider
         creds = resolve_runtime_provider(requested=provider_name)
         _provider_cache[provider_name] = creds
         return creds
     except Exception as e:
-        logger.debug("cobalt-routing: cannot resolve provider '%s': %s", provider_name, e)
+        logger.debug("cobalt-routing: cannot resolve provider %s: %s", provider_name, e)
         return None
 
 
 def _get_provider_for_model(model: str, preset: Dict[str, Any]) -> Optional[str]:
-    """Determine which provider hosts a given model."""
     model_providers = preset.get("model_providers", {})
     if model in model_providers:
         return model_providers[model]
-
-    # Heuristic: check if model exists in known provider catalogs
     try:
         import json
         from hermes_constants import get_hermes_home
@@ -77,26 +89,16 @@ def _get_provider_for_model(model: str, preset: Dict[str, Any]) -> Optional[str]
 
 
 def resolve_routing(task_type: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Resolve full routing info for a task_type.
-
-    Returns dict with keys: model, provider, base_url, api_key, api_mode
-    or None if no routing applies.
-    """
     if not task_type or not _presets:
         return None
-
     preset = _presets.get(_active_preset)
     if not preset:
         return None
-
     routing = preset.get("routing", {})
     model = routing.get(task_type) or routing.get("default")
     if not model:
         return None
-
     result = {"model": model}
-
-    # Check if model needs a different provider than delegation default
     preset_provider = preset.get("provider", "opencode-go")
     if preset_provider == "mixed":
         target_provider = _get_provider_for_model(model, preset)
@@ -107,7 +109,6 @@ def resolve_routing(task_type: Optional[str]) -> Optional[Dict[str, Any]]:
                 result["base_url"] = creds.get("base_url")
                 result["api_key"] = creds.get("api_key")
                 result["api_mode"] = creds.get("api_mode")
-
     return result
 
 
@@ -119,7 +120,7 @@ def set_active_preset(name: str) -> bool:
     global _active_preset
     if name in _presets:
         _active_preset = name
-        logger.info("cobalt-routing: preset -> '%s'", name)
+        logger.info("cobalt-routing: preset -> %s", name)
         return True
     return False
 
@@ -128,11 +129,9 @@ def list_presets() -> Dict[str, str]:
     return {n: p.get("description", "") for n, p in _presets.items()}
 
 
-
-
 _TASK_TYPE_KEYWORDS = {
-    "apply": ["implementa", "escribe", "crea el", "crea un", "crear", "modifica", "write", "implement", "create", "modify", "refactor", "fix", "genera", "generate", "develop", "build", "construye", "code", "script", "programa"],
-    "verify": ["test", "tests", "prueba", "valida", "validate", "ejecuta el", "run the", "failing", "broken", "coverage", "pytest", "funciona correctamente", "verifica que"],
+    "apply": ["implementa", "escribe", "crea el", "crea un", "crear", "modifica", "write", "implement", "create", "modify", "refactor", "fix", "genera", "generate", "develop", "build", "construye", "code", "programa"],
+    "verify": ["test", "tests", "prueba", "valida", "validate", "ejecuta el", "run the", "failing", "broken", "coverage", "pytest", "funciona correctamente", "verifica que", "verify", "ensure it works", "check that"],
     "design": ["arquitectura", "architecture", "design the", "architect", "structure", "system design"],
     "spec": ["requisitos", "requirements", "spec", "criteria", "acceptance", "given/when/then"],
     "propose": ["propone", "evalua", "decide", "propose", "evaluate", "compare", "tradeoff", "alternative", "opcion"],
@@ -143,30 +142,62 @@ _TASK_TYPE_KEYWORDS = {
 
 _TASK_TYPE_PRIORITY = ["apply", "verify", "design", "spec", "propose", "explore", "scout", "summarize"]
 
+_ROLE_TO_TASK_TYPE: Dict[str, str] = {
+    "worker": "apply",
+    "researcher": "explore",
+    "reviewer": "verify",
+    "planner": "design",
+    "scout": "scout",
+}
+
+
+def resolve_task_type_from_role(role: Optional[str], goal: str) -> str:
+    """Resolve task_type considering role as fallback signal from K2.6."""
+    if role and role in _ROLE_TO_TASK_TYPE:
+        mapped = _ROLE_TO_TASK_TYPE[role]
+        if mapped:
+            logger.info("cobalt-routing: resolved task_type=%s from role=%s", mapped, role)
+            return mapped
+    return _infer_task_type(goal)
+
 
 def _infer_task_type(goal: str) -> str:
-    """Infer task_type from goal — first-verb heuristic + keyword scoring with priority."""
+    """Infer task_type from goal - multi-verb analysis + keyword scoring."""
     goal_lower = goal.lower()
+    first_segment = goal_lower[:120]
 
-    # First-verb heuristic: the first 50 chars determine primary intent
-    first_words = goal_lower[:50]
-    if any(v in first_words for v in ["crea", "escribe", "implementa", "genera", "construye", "write", "implement", "create", "build", "develop", "make"]):
-        logger.info("cobalt-routing: inferred task_type=apply from goal (first-verb)")
-        return "apply"
-    if any(v in first_words for v in ["verifica", "testea", "prueba", "valida", "ejecuta", "run", "test", "check if", "validate"]):
-        logger.info("cobalt-routing: inferred task_type=verify from goal (first-verb)")
+    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "write", "implement", "create", "build", "develop", "make", "code", "programa"]
+    verify_verbs = ["verifica", "testea", "prueba", "valida", "ejecuta", "run", "test", "check if", "validate", "confirma", "verify", "ensure", "confirm"]
+    verify_intent_signals = ["verify that", "check that", "ensure that", "confirm that", "verifica que", "validar que", "comprobar que", "report the"]
+    scout_verbs = ["busca", "encuentra", "search", "find", "locate", "descubre"]
+    explore_verbs = ["investiga", "analiza", "lee ", "read", "analyze", "explore", "examine", "revisa", "entiende", "understand"]
+    design_verbs = ["disena", "architect", "design", "planifica", "estructura"]
+
+    if any(v in first_segment for v in verify_verbs):
+        logger.info("cobalt-routing: inferred task_type=verify from goal (verb match)")
         return "verify"
-    if any(v in first_words for v in ["busca", "encuentra", "search", "find", "locate"]):
-        logger.info("cobalt-routing: inferred task_type=scout from goal (first-verb)")
-        return "scout"
-    if any(v in first_words for v in ["investiga", "analiza", "lee ", "read", "analyze", "explore", "examine"]):
-        logger.info("cobalt-routing: inferred task_type=explore from goal (first-verb)")
-        return "explore"
-    if any(v in first_words for v in ["disena", "diseña", "architect", "design"]):
-        logger.info("cobalt-routing: inferred task_type=design from goal (first-verb)")
-        return "design"
+    if any(signal in goal_lower for signal in verify_intent_signals):
+        logger.info("cobalt-routing: inferred task_type=verify from goal (intent signal)")
+        return "verify"
 
-    # Fallback: keyword scoring with priority on ties
+    leading_segment = goal_lower[:30]
+    if any(v in leading_segment for v in creation_verbs):
+        logger.info("cobalt-routing: inferred task_type=apply from goal (leading verb)")
+        return "apply"
+    if any(v in first_segment for v in creation_verbs):
+        if not any(v in leading_segment for v in explore_verbs + scout_verbs):
+            logger.info("cobalt-routing: inferred task_type=apply from goal (verb match)")
+            return "apply"
+    if any(v in first_segment for v in design_verbs):
+        logger.info("cobalt-routing: inferred task_type=design from goal (verb match)")
+        return "design"
+    if any(v in first_segment for v in scout_verbs):
+        logger.info("cobalt-routing: inferred task_type=scout from goal (verb match)")
+        return "scout"
+    if any(v in first_segment for v in explore_verbs):
+        logger.info("cobalt-routing: inferred task_type=explore from goal (verb match)")
+        return "explore"
+
     scores = {}
     for task_type, keywords in _TASK_TYPE_KEYWORDS.items():
         score = sum(1 for kw in keywords if kw in goal_lower)
@@ -177,18 +208,16 @@ def _infer_task_type(goal: str) -> str:
         max_score = max(scores.values())
         for tt in _TASK_TYPE_PRIORITY:
             if scores.get(tt, 0) == max_score:
-                logger.info("cobalt-routing: inferred task_type=%s from goal", tt)
+                logger.info("cobalt-routing: inferred task_type=%s from goal (keyword)", tt)
                 return tt
 
     return "explore"
 
-def wrap_delegate_handler(original_handler: Callable) -> Callable:
-    """Wrap delegate_task handler to inject per-task routing."""
 
+def wrap_delegate_handler(original_handler: Callable) -> Callable:
     def routed_handler(args: Dict[str, Any], **kw) -> Any:
         task_type = args.pop("task_type", None)
         tasks = args.get("tasks")
-
         if tasks and isinstance(tasks, list):
             for t in tasks:
                 tt = t.pop("task_type", None) or task_type or _infer_task_type(t.get("goal", ""))
@@ -204,12 +233,10 @@ def wrap_delegate_handler(original_handler: Callable) -> Callable:
                             t["_routed_api_key"] = routing["api_key"]
                         if "api_mode" in routing:
                             t["_routed_api_mode"] = routing["api_mode"]
-
         elif args.get("goal"):
             effective_tt = task_type or _infer_task_type(args.get("goal", ""))
             routing = resolve_routing(effective_tt)
             if routing:
-                # Convert single-mode to batch-mode with routing applied
                 task_entry = {
                     "goal": args.pop("goal"),
                     "context": args.pop("context", None),
@@ -226,7 +253,5 @@ def wrap_delegate_handler(original_handler: Callable) -> Callable:
                 if "api_mode" in routing:
                     task_entry["_routed_api_mode"] = routing["api_mode"]
                 args["tasks"] = [task_entry]
-
         return original_handler(args, **kw)
-
     return routed_handler

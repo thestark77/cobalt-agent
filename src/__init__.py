@@ -1,10 +1,11 @@
-"""Cobalt Routing Plugin v0.4.0 - Model routing + Tool Guard + Skill Injection for Hermes Agent.
+"""Cobalt Routing Plugin v0.7.0 - Model routing + Tool Guard + Skill Injection for Hermes Agent.
 
-Four enforcement mechanisms via hooks:
+Five enforcement mechanisms via hooks:
 1. TOOL GUARD: Blocks forbidden tools at orchestrator level (pre_tool_call)
 2. MODEL ROUTING: Injects _routed_model into delegate_task (pre_tool_call)
 3. SKILL INJECTION: Instructs sub-agents to load relevant skills (pre_tool_call)
 4. SDD TRIAGE: Forces orchestrator to classify and select SDD phases (pre_llm_call)
+5. DYNAMIC TIMEOUT: Sets per-task timeout via env var before each delegation (pre_tool_call)
 
 Requires source patch in delegate_tool.py for _routed_model fields.
 """
@@ -15,7 +16,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.4.0"
+PLUGIN_VERSION = "0.7.0"
 
 _plugin_dir = Path(__file__).parent
 if str(_plugin_dir) not in sys.path:
@@ -80,6 +81,12 @@ def _patch_delegate_schema():
         if "task_type" not in props:
             props["task_type"] = _TASK_TYPE_SCHEMA
 
+        params = entry.schema.get("parameters", {})
+        required = params.get("required", [])
+        if "task_type" not in required:
+            required.append("task_type")
+            params["required"] = required
+
         tasks_prop = props.get("tasks", {})
         items = tasks_prop.get("items", {})
         items_props = items.get("properties", {})
@@ -124,10 +131,29 @@ _CURATION_SUFFIXES = {
 }
 
 
+def _ensure_skills_toolset(task_dict: dict) -> None:
+    """Ensure 'skills' toolset is available when skill injection is active."""
+    toolsets = task_dict.get("toolsets")
+    if not toolsets:
+        task_dict["toolsets"] = "skills"
+        logger.info("cobalt-routing: set 'skills' toolset for skill_view access")
+        return
+    if isinstance(toolsets, list):
+        if "skills" not in toolsets:
+            toolsets.append("skills")
+            logger.info("cobalt-routing: added 'skills' toolset (list mode)")
+    elif isinstance(toolsets, str):
+        if "skills" not in toolsets:
+            task_dict["toolsets"] = toolsets + ",skills"
+            logger.info("cobalt-routing: added 'skills' toolset (string mode)")
+
+
 def _inject_routing(task_dict: dict, task_type: str) -> None:
-    """Inject routing fields, curation instructions, and skill guidance into a task dict."""
-    from router import resolve_routing
+    """Inject routing fields, curation, skills, and set dynamic timeout."""
+    from router import resolve_routing, apply_dynamic_timeout
     from skill_injector import inject_skill_instruction
+
+    apply_dynamic_timeout(task_type)
 
     routing = resolve_routing(task_type)
     if routing:
@@ -145,29 +171,31 @@ def _inject_routing(task_dict: dict, task_type: str) -> None:
             task_dict.get("goal", "")[:50], task_type, routing["model"]
         )
 
-    # Skill injection: tell sub-agent which skills to load
-    inject_skill_instruction(task_dict, task_type)
+    injected_skills = inject_skill_instruction(task_dict, task_type)
+
+    if injected_skills:
+        _ensure_skills_toolset(task_dict)
 
     suffix = _CURATION_SUFFIXES.get(task_type)
     if suffix:
         task_dict["goal"] = task_dict.get("goal", "") + suffix
+        logger.info("cobalt-routing: curation suffix injected for task_type=%s", task_type)
 
 
 def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
-    """Unified pre_tool_call hook: guard + routing.
+    """Unified pre_tool_call hook: guard + routing + timeout.
 
     1. GUARD: If orchestrator tries a forbidden tool, return block directive.
     2. ROUTING: If delegate_task, inject _routed_model based on task_type.
+    3. TIMEOUT: Set per-task timeout via env var.
     """
     task_id = kwargs.get("task_id", "")
 
-    # --- TOOL GUARD ---
     from tool_guard import check_tool_allowed
     block = check_tool_allowed(tool_name, task_id)
     if block is not None:
         return block
 
-    # --- MODEL ROUTING (only for delegate_task) ---
     if tool_name != "delegate_task":
         return None
 
@@ -177,38 +205,59 @@ def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
 
     _patch_delegate_schema()
 
-    from router import _infer_task_type
+    from router import _infer_task_type, resolve_task_type_from_role
 
     top_task_type = args.pop("task_type", None)
     tasks = args.get("tasks")
 
     if tasks and isinstance(tasks, list):
         for t in tasks:
-            tt = t.pop("task_type", None) or top_task_type or _infer_task_type(t.get("goal", ""))
-            _inject_routing(t, tt)
+            tt = t.pop("task_type", None) or top_task_type
+            if not tt:
+                role = t.get("role")
+                tt = resolve_task_type_from_role(role, t.get("goal", ""))
+            try:
+                _inject_routing(t, tt)
+            except Exception as e:
+                logger.error("cobalt-routing: inject_routing failed for batch task: %s", e)
     elif args.get("goal"):
-        effective_tt = top_task_type or _infer_task_type(args.get("goal", ""))
-        task_entry = {
-            "goal": args.pop("goal"),
-        }
-        ctx = args.pop("context", None)
-        if ctx:
-            task_entry["context"] = ctx
-        ts = args.pop("toolsets", None)
-        if ts:
-            task_entry["toolsets"] = ts
-        role = args.pop("role", None)
-        if role:
-            task_entry["role"] = role
-        _inject_routing(task_entry, effective_tt)
-        args["tasks"] = [task_entry]
+        role = args.get("role")
+        effective_tt = top_task_type or resolve_task_type_from_role(role, args.get("goal", ""))
+        saved_goal = args.get("goal")
+        saved_ctx = args.get("context")
+        saved_ts = args.get("toolsets")
+        saved_role = args.get("role")
+        try:
+            task_entry = {
+                "goal": args.pop("goal"),
+            }
+            ctx = args.pop("context", None)
+            if ctx:
+                task_entry["context"] = ctx
+            ts = args.pop("toolsets", None)
+            if ts:
+                task_entry["toolsets"] = ts
+            r = args.pop("role", None)
+            if r:
+                task_entry["role"] = r
+            _inject_routing(task_entry, effective_tt)
+            args["tasks"] = [task_entry]
+        except Exception as e:
+            logger.error("cobalt-routing: single->batch conversion failed: %s — restoring args", e)
+            args["goal"] = saved_goal
+            if saved_ctx:
+                args["context"] = saved_ctx
+            if saved_ts:
+                args["toolsets"] = saved_ts
+            if saved_role:
+                args["role"] = saved_role
 
     args.pop("_cobalt_routed", None)
     return None
 
 
 def register(ctx):
-    """Plugin entry point — called by Hermes plugin loader."""
+    """Plugin entry point - called by Hermes plugin loader."""
     global _registered
     if _registered:
         return
@@ -218,7 +267,6 @@ def register(ctx):
     from router import load_presets
     from preset_tool import TOOL_NAME, TOOL_SCHEMA, handle_preset
 
-    # Version gate
     status = check_version()
     if status == "error":
         raise RuntimeError(
@@ -231,7 +279,6 @@ def register(ctx):
             PLUGIN_VERSION,
         )
 
-    # Patch verification
     patch_ok = verify_patch_applied()
     if not patch_ok:
         logger.warning(
@@ -239,10 +286,8 @@ def register(ctx):
             "Per-task routing will be INACTIVE. See README for patch instructions."
         )
 
-    # Load presets
     load_presets()
 
-    # Register cobalt_preset tool
     ctx.register_tool(
         name=TOOL_NAME,
         toolset="cobalt",
@@ -252,23 +297,17 @@ def register(ctx):
         emoji="⚡",
     )
 
-    # Register unified pre_tool_call hook (guard + routing + skills)
     ctx.register_hook("pre_tool_call", _pre_tool_call_hook)
 
-    # Register SDD triage hook (mandatory classification before model responds)
     from sdd_triage import pre_llm_call_hook
     ctx.register_hook("pre_llm_call", pre_llm_call_hook)
 
-    # Try eager schema patch
     if not _patch_delegate_schema():
-        logger.info(
-            "cobalt-routing: schema patch deferred to first delegate_task call"
-        )
+        logger.info("cobalt-routing: schema patch deferred to first delegate_task call")
 
-    # Log guard status
     from tool_guard import _guard_enabled, ORCHESTRATOR_ALLOWED
     logger.info(
-        "cobalt-routing v%s loaded (patch=%s, guard=%s, skills=ON, allowed=%d tools, preset=economy)",
+        "cobalt-routing v%s loaded (patch=%s, guard=%s, skills=ON, timeout=DYNAMIC, allowed=%d tools)",
         PLUGIN_VERSION,
         "OK" if patch_ok else "MISSING",
         "ON" if _guard_enabled else "OFF",
