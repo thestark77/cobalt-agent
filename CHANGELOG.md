@@ -4,6 +4,36 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
 
 ---
 
+## v0.5.0 (2026-05-04) — SDD Triage + Steering + Versioning + Metrics
+
+### WORKS (to verify in test)
+- [ ] SDD triage injected on every orchestrator turn
+- [ ] Triage classification present in orchestrator's first response line
+- [ ] Phases stated match actual delegations executed
+- [ ] Active plan detected → steering variant injected
+- [ ] Model routing still works (no regression from v0.4.0)
+- [ ] Tool guard still works (no regression)
+- [ ] Skill injection still works (no regression)
+- [ ] Curation suffixes still present (no regression)
+- [ ] Memory bookends (honcho_search + honcho_conclude)
+- [ ] Version artifacts created (context/appVersions/)
+
+### BROKEN (known issues — pending test)
+- [ ] Steering detection relies on conversation_history kwarg (needs verification that Hermes passes it)
+- [ ] Version manager not yet hooked into delegation flow (manual trigger only)
+- [ ] appVersions dir creation depends on project root detection (may fail outside git repos)
+
+### CHANGES
+- Removed MIN_MESSAGE_LENGTH threshold from triage (always injects)
+- Added steering variant when active plan detected
+- Created version_manager.py (init, save_plan, append, close)
+- Created METRICS.md (measurable parameters + regression detection)
+- Updated SOUL.md with steering awareness
+- Updated FLOW.md sections 13-15 (steering, versioning, metrics)
+- All new modules use only stdlib (zero Hermes imports)
+
+---
+
 ## v0.4.0 (2026-05-03) — Skill Injection + Native Install
 
 ### WORKS (confirmed functional)

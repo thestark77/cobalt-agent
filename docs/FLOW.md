@@ -225,16 +225,97 @@ All behavior is achieved via hooks, registered tools, and the plugin lifecycle.
 
 ---
 
-## 13. Installation (Planned)
+## 13. Mid-Execution Steering (v0.5.0)
+
+### Problem:
+User sends a new message while an SDD plan is being executed. Without handling,
+the orchestrator may create a second parallel plan or ignore the new instruction.
+
+### Solution:
+The `sdd_triage.py` hook detects if there's an active plan (by checking recent
+conversation history for delegate_task or todo calls). If active:
+
+- Injects STEERING variant instead of normal TRIAGE
+- Forces classification: MODIFIES / EXTENDS / OVERRIDES / UNRELATED
+- Orchestrator must explicitly state how the new message affects the plan
+- Then: ANSWER → RE-PRIORITIZE → RESUME
+
+### How it works with Hermes:
+- Hermes native `/busy steer` delivers user messages mid-execution
+- The message arrives as a new user turn after the next tool call completes
+- Our pre_llm_call hook sees the new turn, detects active plan, injects steering
+- Orchestrator classifies and adjusts — no new SDD cycle created unless OVERRIDES
+
+### Detection of "active plan":
+Checks last 10 messages in conversation_history for:
+- `delegate_task` tool_use calls (execution in progress)
+- `todo` tool_use calls (task breakdown active)
+- NOT triggered if last action was `honcho_conclude` (plan already closed)
+
+---
+
+## 14. Automatic App Versioning (v0.5.0)
+
+### Purpose:
+Track every execution cycle with artifacts for traceability and learning.
+
+### Structure:
+```
+{project_root}/context/appVersions/
+├── v0.1.0/
+│   ├── original_prompt.md   ← Raw user prompt
+│   ├── plan.md              ← SDD phases + tasks
+│   └── changelog.md         ← Generated at close
+├── v0.2.0/
+│   └── ...
+```
+
+### Lifecycle:
+1. **Init**: On first Apply delegation of an SDD cycle, `version_manager.init_version()` creates the folder and saves the original prompt
+2. **Plan**: After triage + decomposition, save phases and tasks to plan.md
+3. **Mid-session additions**: New user instructions appended to plan.md with timestamp
+4. **Close**: After honcho_conclude, generate changelog from completed tasks
+
+### Version numbering:
+- Auto-increments patch from latest existing version
+- Major/minor bumps are manual (user specifies)
+- First version: v0.1.0
+
+### Integration:
+- `version_manager.py` is pure stdlib (Path, datetime, re) — zero Hermes dependencies
+- Does NOT replace Hermes `todo` tool — complements it with persistent artifacts
+- Does NOT use PROGRESS.md — `todo` serves as the live state anchor
+
+---
+
+## 15. Metrics & Regression Control (v0.5.0)
+
+Every test session measures:
+- Context usage (<30% target)
+- Model routing compliance (100%)
+- Parallel utilization (independent tasks bundled)
+- SDD triage present (every turn)
+- Phases actually executed vs stated
+- Tool guard compliance (0 sub-agent blocks)
+- Skill injection accuracy
+- Memory bookends (search at start, conclude at end)
+- Code quality (runs without errors)
+
+Regression = any WORKS item from the CHANGELOG that fails in a new version.
+See `METRICS.md` for full parameter definitions and extraction methods.
+
+---
+
+## 16. Installation (Planned)
 
 Automated script that:
 1. Detects/installs Hermes Agent (tested version)
-2. Applies source patch (1 line in delegate_tool.py)
+2. Applies source patch via `patches/apply_routing_patch.py apply`
 3. Copies plugin to ~/.hermes/plugins/cobalt-routing/
-4. Installs skills to ~/.hermes/skills/
+4. Installs skills via native `hermes skills install`
 5. Writes SOUL.md
-6. Prompts user for: API keys, provider selection, platform (Telegram/Discord/etc)
+6. Prompts user for: API keys, provider selection, platform
 7. Writes config.yaml + honcho.json
-8. Runs health_check.py to verify
+8. Runs verification
 
 No other interaction needed. Fully unattended after API key input.
