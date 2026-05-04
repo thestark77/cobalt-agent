@@ -1,0 +1,58 @@
+active: economy
+max_hermes_version: 0.12.99
+presets:
+  balanced:
+    description: Zen for critical thinking, Go for execution — best cost/quality
+    provider: mixed
+    recommended_orchestrator: kimi-k2.6
+    requires_providers:
+    - opencode-go
+    - opencode
+    routing:
+      apply: kimi-k2.6
+      archive: kimi-k2.6
+      default: kimi-k2.6
+      design: claude-sonnet-4-6
+      explore: deepseek-v4-flash
+      propose: gemini-3.1-pro
+      scout: deepseek-v4-flash
+      spec: gemini-3.1-pro
+      summarize: deepseek-v4-flash
+      tasks: gpt-5.4
+      verify: gpt-5.4
+  economy:
+    description: OpenCode Go only — minimum cost, good capability
+    provider: opencode-go
+    recommended_orchestrator: kimi-k2.6
+    routing:
+      apply: kimi-k2.6
+      archive: kimi-k2.6
+      default: kimi-k2.6
+      design: deepseek-v4-pro
+      explore: deepseek-v4-flash
+      propose: deepseek-v4-pro
+      scout: deepseek-v4-flash
+      spec: deepseek-v4-pro
+      summarize: deepseek-v4-flash
+      tasks: deepseek-v4-pro
+      verify: deepseek-v4-pro
+  quality:
+    description: Zen for everything critical — maximum quality, higher cost
+    provider: mixed
+    recommended_orchestrator: kimi-k2.6
+    requires_providers:
+    - opencode-go
+    - opencode
+    routing:
+      apply: claude-sonnet-4-6
+      archive: kimi-k2.6
+      default: claude-sonnet-4-6
+      design: claude-opus-4-6
+      explore: claude-sonnet-4-6
+      propose: claude-sonnet-4-6
+      scout: deepseek-v4-flash
+      spec: gemini-3.1-pro
+      summarize: deepseek-v4-flash
+      tasks: gpt-5.4
+      verify: gpt-5.4
+schema_version: 1
