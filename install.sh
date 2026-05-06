@@ -152,6 +152,13 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" 
     MISSING=1
 fi
 
+if ! python3 -c "import venv" 2>/dev/null; then
+    err "python3-venv not found. Install it: sudo apt install python${PYTHON_VERSION}-venv"
+    MISSING=1
+else
+    log "python3-venv module available"
+fi
+
 if [ "$MISSING" -eq 1 ]; then
     err "Missing prerequisites. Install them and re-run."
     exit 1

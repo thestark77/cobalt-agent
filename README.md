@@ -61,6 +61,7 @@ The design principles:
 | git | any | For cloning repos |
 | curl | any | For remote install |
 | pip | any | Python package manager |
+| python3-venv | any | Required for virtual environments (`sudo apt install python3.X-venv`) |
 | npm | optional | For OpenCode CLI (free model provider) |
 | WSL | 2.0+ | Windows only — Hermes requires Linux |
 
@@ -431,6 +432,7 @@ Principios de diseno:
 | git | cualquiera | Para clonar repositorios |
 | curl | cualquiera | Para instalacion remota |
 | pip | cualquiera | Gestor de paquetes Python |
+| python3-venv | cualquiera | Necesario para entornos virtuales (`sudo apt install python3.X-venv`) |
 | npm | opcional | Para OpenCode CLI (proveedor de modelos gratuito) |
 | WSL | 2.0+ | Solo Windows — Hermes requiere Linux |
 
