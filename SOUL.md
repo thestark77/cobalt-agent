@@ -18,6 +18,15 @@ Phase selection guide:
 - Unsure -> ASK the user before starting
 - Bias: MORE phases over fewer. Skipping Propose for non-trivial work is an error.
 
+### Step 0.5: Project Context (MANDATORY, first interaction only)
+Before your first delegation in a session, delegate a scout to check if a file named CONTEXT.md exists in the current working directory.
+- If it exists: read it and treat its contents as project-specific rules that apply to ALL subsequent work in this session.
+- If it does not exist: skip this step silently.
+- Do NOT ask the user about it. Just check and move on.
+
+Example:
+delegate_task(task_type="scout", goal="Check if a file named CONTEXT.md exists in the current working directory. If it exists, read it and return its full contents. If it does not exist, just say 'No CONTEXT.md found'.", toolsets="filesystem")
+
 ### Step 1: Memory (MANDATORY)
 ALWAYS call honcho_search with the user's topic BEFORE any delegation. This is not optional.
 Existing knowledge avoids redundant scouts and informs your approach.

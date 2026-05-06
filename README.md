@@ -115,6 +115,17 @@ nano ~/.hermes/honcho.json
 hermes chat
 ```
 
+### Per-Project Context
+
+Hermes loads all configuration globally from `~/.hermes/`. To give project-specific instructions without polluting the global config, place a `CONTEXT.md` file in the root of your project:
+
+```bash
+cp cobalt-agent/templates/CONTEXT.md ~/my-project/CONTEXT.md
+# Edit it with your project's stack, rules, and commands
+```
+
+Hermes will automatically read it at the start of every session when launched from that directory. See `templates/CONTEXT.md` for the full template.
+
 ---
 
 ## How It Works
@@ -478,6 +489,17 @@ nano ~/.hermes/honcho.json
 # Inicia
 hermes chat
 ```
+
+### Contexto por Proyecto
+
+Hermes carga toda la configuracion de forma global desde `~/.hermes/`. Para dar instrucciones especificas de un proyecto sin contaminar la config global, coloca un archivo `CONTEXT.md` en la raiz de tu proyecto:
+
+```bash
+cp cobalt-agent/templates/CONTEXT.md ~/mi-proyecto/CONTEXT.md
+# Editalo con el stack, reglas y comandos de tu proyecto
+```
+
+Hermes lo lee automaticamente al inicio de cada sesion cuando se lanza desde ese directorio. Ver `templates/CONTEXT.md` para la plantilla completa.
 
 ---
 
