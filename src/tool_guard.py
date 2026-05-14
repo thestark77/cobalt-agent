@@ -24,12 +24,16 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "send_message",
     "session_search",
     "cronjob",
-    # Honcho memory tools — orchestrator must access memory directly
-    "honcho_profile",
-    "honcho_search",
-    "honcho_reasoning",
-    "honcho_context",
-    "honcho_conclude",
+    # Engram memory tools — orchestrator accesses memory directly
+    "mem_save",
+    "mem_search",
+    "mem_get_observation",
+    "mem_context",
+    "mem_session_summary",
+    "mem_save_prompt",
+    "mem_suggest_topic_key",
+    "mem_current_project",
+    "mem_update",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.

@@ -6,6 +6,9 @@ orchestrator turn. No exceptions, no heuristics, no threshold.
 The orchestrator must classify the request and state which SDD phases
 apply before taking any action. If there is an active plan (todo items
 in progress), the triage switches to STEERING mode.
+
+The Engram memory protocol is composed onto this hook (see __init__.py)
+so the orchestrator sees both blocks on every turn.
 """
 
 import logging
@@ -16,7 +19,9 @@ logger = logging.getLogger(__name__)
 _TRIAGE_INJECTION = """
 [MANDATORY TRIAGE — respond to this BEFORE any delegation or action]
 
-STEP 0: Call honcho_search with the user's topic to check for relevant prior context.
+STEP 0: Call `mem_search` (or `mem_context` if you only need recent history)
+with the user's topic to check for prior context. See the Engram protocol
+block below for full memory rules.
 
 Classify this request:
 1. CONVERSATION (question/opinion/clarification/feedback) → Respond directly, no delegation needed.
@@ -28,7 +33,7 @@ Classify this request:
    - Tasks (atomic breakdown via todo)
    - Apply (write/modify code)
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
-   - Archive (save learnings via honcho_conclude)
+   - Archive (persist final state via `mem_session_summary` or `mem_save`)
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
@@ -37,7 +42,7 @@ Bias: apply MORE phases rather than fewer for any non-trivial task.
 
 CRITICAL RULES:
 - Verify must be its OWN separate delegate_task call. Never ask the Apply sub-agent to also verify.
-- Always call honcho_conclude at the end (Archive phase).
+- Archive phase MUST end with `mem_session_summary` (or `mem_save` for a single decision).
 """
 
 _STEERING_INJECTION = """
@@ -103,7 +108,7 @@ def _has_active_plan(conversation_history: list = None) -> bool:
                         name = part.get("name", "")
                         if name in ("delegate_task", "todo"):
                             return True
-                        if name == "honcho_conclude":
+                        if name in ("mem_session_summary", "honcho_conclude"):
                             return False
         elif isinstance(content, str):
             if "TASK:" in content and "→" in content:
