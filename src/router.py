@@ -164,39 +164,48 @@ def resolve_task_type_from_role(role: Optional[str], goal: str) -> str:
 def _infer_task_type(goal: str) -> str:
     """Infer task_type from goal - multi-verb analysis + keyword scoring."""
     goal_lower = goal.lower()
-    first_segment = goal_lower[:120]
+    # Limit to first 60 chars for verb-only signals to avoid matching keywords
+    # inside file paths or filenames (e.g. "lib-validate-json.py" → verify false positive).
+    first_segment = goal_lower[:60]
+    full_segment = goal_lower[:120]
 
-    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "write", "implement", "create", "build", "develop", "make", "code", "programa"]
-    verify_verbs = ["verifica", "testea", "prueba", "valida", "ejecuta", "run", "test", "check if", "validate", "confirma", "verify", "ensure", "confirm"]
-    verify_intent_signals = ["verify that", "check that", "ensure that", "confirm that", "verifica que", "validar que", "comprobar que", "report the"]
+    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "modifica", "modificar", "modify", "refactoriza", "write", "implement", "create", "build", "develop", "make", "code", "programa"]
+    verify_verbs = ["verifica", "testea", "prueba", "ejecuta", "run", "test", "check if", "confirma", "verify", "ensure", "confirm"]
+    verify_intent_signals = ["verify that", "check that", "ensure that", "confirm that", "verifica que", "comprobar que", "report the"]
     scout_verbs = ["busca", "encuentra", "search", "find", "locate", "descubre"]
     explore_verbs = ["investiga", "analiza", "lee ", "read", "analyze", "explore", "examine", "revisa", "entiende", "understand"]
-    design_verbs = ["disena", "architect", "design", "planifica", "estructura"]
+    design_verbs = ["disena", "architect", "design", "planifica"]
+
+    leading_segment = goal_lower[:30]
+
+    # Apply leading verb wins unconditionally — checked before verify to prevent
+    # filenames in the path (e.g. "lib-validate-json.py") from hijacking routing.
+    if any(v in leading_segment for v in creation_verbs):
+        logger.info("cobalt-routing: inferred task_type=apply from goal (leading verb)")
+        return "apply"
 
     if any(v in first_segment for v in verify_verbs):
         logger.info("cobalt-routing: inferred task_type=verify from goal (verb match)")
         return "verify"
-    if any(signal in goal_lower for signal in verify_intent_signals):
+    if any(signal in full_segment for signal in verify_intent_signals):
         logger.info("cobalt-routing: inferred task_type=verify from goal (intent signal)")
         return "verify"
 
-    leading_segment = goal_lower[:30]
-    if any(v in leading_segment for v in creation_verbs):
-        logger.info("cobalt-routing: inferred task_type=apply from goal (leading verb)")
-        return "apply"
     if any(v in first_segment for v in creation_verbs):
         if not any(v in leading_segment for v in explore_verbs + scout_verbs):
             logger.info("cobalt-routing: inferred task_type=apply from goal (verb match)")
             return "apply"
-    if any(v in first_segment for v in design_verbs):
-        logger.info("cobalt-routing: inferred task_type=design from goal (verb match)")
-        return "design"
     if any(v in first_segment for v in scout_verbs):
         logger.info("cobalt-routing: inferred task_type=scout from goal (verb match)")
         return "scout"
+    # explore checked before design: "explorar ... estructura" should route to
+    # explore, not design, because the leading intent is exploration.
     if any(v in first_segment for v in explore_verbs):
         logger.info("cobalt-routing: inferred task_type=explore from goal (verb match)")
         return "explore"
+    if any(v in full_segment for v in design_verbs):
+        logger.info("cobalt-routing: inferred task_type=design from goal (verb match)")
+        return "design"
 
     scores = {}
     for task_type, keywords in _TASK_TYPE_KEYWORDS.items():
