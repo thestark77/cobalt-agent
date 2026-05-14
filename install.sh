@@ -336,6 +336,22 @@ log "Installing Hermes dependencies..."
 "$VENV_DIR/bin/pip" install -q --upgrade pip
 "$VENV_DIR/bin/pip" install -q -e "$HERMES_AGENT_DIR"
 
+# markitdown-mcp (Microsoft official) — converts files (PDF/DOCX/XLSX/audio/...)
+# to Markdown so sub-agents don't burn tokens on binary content. Pulled from
+# PyPI (auto-updates on every install.sh run).
+log "Installing markitdown-mcp..."
+if "$VENV_DIR/bin/pip" install -q --upgrade markitdown-mcp 2>/dev/null; then
+    log "markitdown-mcp installed/updated"
+    MARKITDOWN_BIN="$VENV_DIR/bin/markitdown-mcp"
+    if [ ! -x "$MARKITDOWN_BIN" ]; then
+        warn "markitdown-mcp binary not found at $MARKITDOWN_BIN after install"
+        MARKITDOWN_BIN=""
+    fi
+else
+    warn "markitdown-mcp install failed (continuing without it)"
+    MARKITDOWN_BIN=""
+fi
+
 mkdir -p "$HOME/.local/bin"
 ln -sf "$VENV_DIR/bin/hermes" "$HOME/.local/bin/hermes"
 log "Linked hermes -> ~/.local/bin/hermes"
@@ -508,11 +524,12 @@ YAML
     log "config.yaml created"
 fi
 
-log "Merging cobalt + engram settings into config.yaml (preserving your config)..."
+log "Merging cobalt + engram + markitdown settings into config.yaml (preserving your config)..."
 ENGRAM_ENABLED="$ENGRAM_ENABLED" \
 ENGRAM_SERVER="$ENGRAM_SERVER" \
 ENGRAM_TOKEN="$ENGRAM_TOKEN" \
 ENGRAM_AUTOSYNC="$ENGRAM_AUTOSYNC" \
+MARKITDOWN_BIN="$MARKITDOWN_BIN" \
 "$VENV_DIR/bin/python" - << 'PYTHON'
 import os
 import yaml
@@ -555,9 +572,11 @@ if memory.get("provider") == "honcho":
 agent = config.setdefault("agent", {})
 agent.setdefault("max_turns", 90)
 
+# MCP servers (only the ones whose env vars / binaries are present)
+mcp_servers = config.setdefault("mcp_servers", {})
+
 # Engram MCP server wiring (only when env vars present)
 if os.environ.get("ENGRAM_ENABLED") == "1":
-    mcp_servers = config.setdefault("mcp_servers", {})
     engram = mcp_servers.setdefault("engram", {})
     # `engram` binary exposes the MCP server via `engram mcp` subcommand
     engram["command"] = "engram"
@@ -567,6 +586,18 @@ if os.environ.get("ENGRAM_ENABLED") == "1":
     env["ENGRAM_CLOUD_TOKEN"] = os.environ.get("ENGRAM_TOKEN", "")
     if os.environ.get("ENGRAM_AUTOSYNC"):
         env["ENGRAM_CLOUD_AUTOSYNC"] = os.environ["ENGRAM_AUTOSYNC"]
+
+# markitdown MCP server wiring (only when the binary is in the venv)
+markitdown_bin = os.environ.get("MARKITDOWN_BIN", "").strip()
+if markitdown_bin:
+    md = mcp_servers.setdefault("markitdown", {})
+    md["command"] = markitdown_bin
+    md["args"] = []
+
+# Drop the mcp_servers section if it ended up empty so we don't leave a
+# dangling key in user configs that never had MCP wiring.
+if not mcp_servers:
+    config.pop("mcp_servers", None)
 
 config_path.write_text(
     yaml.dump(config, default_flow_style=False, allow_unicode=True, sort_keys=False),
@@ -602,6 +633,12 @@ SKILLS=(
     "skills-sh/gentleman-programming/sdd-agent-team/branch-pr"
     "skills-sh/gentleman-programming/sdd-agent-team/skill-creator"
     "skills-sh/thestark77/autosdd/knowledge-graph"
+    # v0.8.0 additions — design / browser automation
+    "skills-sh/microsoft/playwright-cli/playwright-cli"
+    "skills-sh/pbakaus/impeccable/impeccable"
+    "skills-sh/alchaincyf/huashu-design/huashu-design"
+    "skills-sh/nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max"
+    "skills-sh/Leonxlnx/taste-skill/gpt-tasteskill"
 )
 
 SKILL_NAMES=(
@@ -615,6 +652,12 @@ SKILL_NAMES=(
     "branch-pr"
     "skill-creator"
     "knowledge-graph"
+    # v0.8.0 additions
+    "playwright-cli"
+    "impeccable"
+    "huashu-design"
+    "ui-ux-pro-max"
+    "gpt-tasteskill"
 )
 
 log "Installing ${#SKILLS[@]} skills..."

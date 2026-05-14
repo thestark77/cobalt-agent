@@ -353,6 +353,12 @@ After installation, all config lives in `~/.hermes/`:
 
 Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
 
+### File conversion: markitdown (Microsoft, MCP)
+
+[`markitdown-mcp`](https://github.com/microsoft/markitdown) is installed in the Hermes venv (`pip install --upgrade markitdown-mcp` runs on every install.sh execution, so updates are automatic). It exposes `convert_to_markdown(uri)` and is registered as an MCP server alongside Engram. Cobalt injects a mandatory protocol on every turn so PDFs / DOCX / XLSX / PPTX / images / audio / EPUB / CSV / XML / ZIP files get routed through markitdown FIRST — direct binary reads burn tokens for content the model cannot parse.
+
+**No Docker required** — markitdown is a Python package and runs inside the existing Hermes venv. The Docker option exists in upstream as a sandbox alternative, not a requirement.
+
 Sub-agents automatically get a "save discoveries before returning" rider appended to their goal so nothing decided inside a delegation is lost.
 
 ### Patch drift monitoring
@@ -366,18 +372,33 @@ The cron entry is **idempotent**: re-running install.sh updates the entry only w
 
 ### Installed Skills
 
-| Skill | Source |
-|---|---|
-| prompt-engineering-patterns | wshobson/agents |
-| frontend-design | anthropics/skills |
-| interface-design | dammyjay93 |
-| e2e-testing-patterns | wshobson/agents |
-| error-handling-patterns | wshobson/agents |
-| postgresql-table-design | wshobson/agents |
-| judgment-day | gentleman-programming/sdd-agent-team |
-| branch-pr | gentleman-programming/sdd-agent-team |
-| skill-creator | gentleman-programming/sdd-agent-team |
-| knowledge-graph | thestark77/autosdd |
+| Skill | Source | Use case |
+|---|---|---|
+| prompt-engineering-patterns | wshobson/agents | LLM prompt design, few-shot, CoT |
+| frontend-design | anthropics/skills | Generic frontend / React / Vue / Tailwind |
+| interface-design | dammyjay93 | Admin panels, backoffice, SaaS interfaces |
+| e2e-testing-patterns | wshobson/agents | E2E test patterns, fixtures, page objects |
+| error-handling-patterns | wshobson/agents | Error/result types, retry, circuit breakers |
+| postgresql-table-design | wshobson/agents | Schema, migrations, indexing |
+| judgment-day | gentleman-programming/sdd-agent-team | Dual-review / adversarial review |
+| branch-pr | gentleman-programming/sdd-agent-team | PR strategy, branch naming, review flow |
+| skill-creator | gentleman-programming/sdd-agent-team | Build new skills |
+| knowledge-graph | thestark77/autosdd | Visualize AI memory (works with Engram) |
+| **playwright-cli** | microsoft/playwright-cli | Browser automation, codegen, selectors |
+| **impeccable** | pbakaus/impeccable | Design system / design language refinement |
+| **huashu-design** | alchaincyf/huashu-design | HTML hi-fi prototypes, slides, animations |
+| **ui-ux-pro-max** | nextlevelbuilder/ui-ux-pro-max-skill | Professional UI/UX across platforms |
+| **gpt-tasteskill** | Leonxlnx/taste-skill | Anti-slop, premium frontend taste |
+
+### Auto-routing
+
+Skill discovery is delegated to **Hermes's native mechanism** (`agent/prompt_builder.py:build_skills_system_prompt`, called from `run_agent.py`). On every system-prompt build Hermes scans `~/.hermes/skills/**/SKILL.md`, reads `name + description` from each frontmatter, and injects an `<available_skills>` block into the system prompt with a mandatory instruction to load relevant skills via `skill_view(name)`.
+
+This is the Anthropic Skills progressive-disclosure pattern: lightweight metadata in the system prompt, full skill body loaded on-demand. The catalog is LRU-cached in memory and disk-snapshotted with mtime invalidation, so the token cost is paid once per session, not per turn.
+
+**Cobalt does NOT layer a second skill router on top.** Earlier versions (v0.7.x and prior) used a keyword table in `src/skill_injector.py` to inject `[SKILL REQUIRED]` riders into sub-agent goals — that was redundant with Hermes's native discovery and was removed in v0.8.0. Rich description-based selection by the model strictly beats brittle keyword matching, and skipping the cobalt rider saves tokens on every delegation.
+
+If you want to force a specific skill on a sub-agent, write the instruction directly in the orchestrator's goal text: `"Before starting, call skill_view('frontend-design') and apply its rules."` The orchestrator already sees the `<available_skills>` catalog every turn and has enough context to make this call.
 
 ---
 
