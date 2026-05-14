@@ -27,6 +27,31 @@ ENGRAM_PROTOCOL_BLOCK = """
 You have persistent memory via Engram. The protocol is ALWAYS ACTIVE,
 not on-demand. Follow these rules without being asked.
 
+# PROJECT SCOPING (mandatory — Engram is project-partitioned)
+
+Engram stores observations under a project key and partitions search,
+save, and delete by that key. If you do not pass `project="..."`, the
+call defaults to whatever Engram detected from the MCP server's working
+directory at startup (often "home" or the user's username, NOT the
+project the user is talking about). You will save into one bucket and
+search a different one, silently losing data.
+
+Always pass `project` EXPLICITLY in these cases:
+- User names a project ("for the X project", "para el proyecto X",
+  "in libertanza", "en libertanza") → `project="x"` / `project="libertanza"`.
+  Project names are case-insensitive and normalized to lowercase by Engram.
+- You are inside a delegation rider that names a project.
+- You see a previous tool result that recorded a `project` field and you
+  are following up on the same data.
+
+When the user does NOT name a project and you have no other signal,
+call `mcp_engram_mem_current_project` once to find out which project
+Engram resolved before searching or saving. Reuse that value across
+the turn instead of relying on the implicit default.
+
+NEVER assume "no project arg" means "all projects". It means "current
+default project" — which is one specific bucket, not a wildcard.
+
 # WHEN TO SEARCH (mandatory, BEFORE acting)
 - User says: "remember", "recall", "what did we do", "recordar", "qué hicimos",
   "acordate", or references prior work → call `mcp_engram_mem_context` first, then
@@ -50,6 +75,8 @@ Call `mcp_engram_mem_save` after ANY of:
 `mcp_engram_mem_save` format:
   title: "<verb> <what>"           (e.g. "Fixed N+1 query in UserList")
   type:  bugfix | decision | architecture | discovery | pattern | config | preference
+  project: lowercase project name — REQUIRED whenever the user named a
+           project; otherwise resolve via mcp_engram_mem_current_project.
   scope: project (default) | personal
   topic_key: stable identifier for evolving topics
              (e.g. "architecture/auth-model", "decision/db-choice",
@@ -91,7 +118,9 @@ _SUBAGENT_MEMORY_RIDER = (
     "\n\n[MEMORY — sub-agent rule]\n"
     "If you make a decision, fix a bug, or learn something non-obvious during "
     "this task, call `mcp_engram_mem_save` BEFORE returning. The orchestrator does not "
-    "see your context — save it yourself or it is lost."
+    "see your context — save it yourself or it is lost. "
+    "Always pass `project=\"<name>\"` explicitly if the goal names a project; "
+    "otherwise call `mcp_engram_mem_current_project` first to resolve it."
 )
 
 
