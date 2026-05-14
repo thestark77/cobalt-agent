@@ -16,7 +16,7 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 
 - [ ] Orchestrator CANNOT call web_search (gets BLOCKED message)
 - [ ] Orchestrator CAN call delegate_task
-- [ ] Orchestrator CAN call mem_search / mem_session_summary
+- [ ] Orchestrator CAN call mcp_engram_mem_search / mcp_engram_mem_session_summary
 - [ ] Sub-agents CAN call any tool (web_search, write_file, etc.)
 - [ ] No BLOCKED entries in agent.log for sub-agents (sa- prefix)
 
@@ -39,9 +39,9 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 ## Memory (Engram)
 
 - [ ] `engram` binary in PATH; `ENGRAM_CLOUD_SERVER` / `ENGRAM_CLOUD_TOKEN` exported
-- [ ] mem_search returns relevant results
-- [ ] mem_save persists and is recoverable via mem_get_observation
-- [ ] mem_session_summary saves at end of every session
+- [ ] mcp_engram_mem_search returns relevant results
+- [ ] mcp_engram_mem_save persists and is recoverable via mcp_engram_mem_get_observation
+- [ ] mcp_engram_mem_session_summary saves at end of every session
 - [ ] Cross-language search works (save EN, search ES)
 
 ## Curation
@@ -86,7 +86,7 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 - [ ] Tasks: atomic breakdown via todo tool
 - [ ] Apply: code written by sub-agent
 - [ ] Verify: tests run and pass
-- [ ] Archive: learnings saved to Engram via mem_save / mem_session_summary
+- [ ] Archive: learnings saved to Engram via mcp_engram_mem_save / mcp_engram_mem_session_summary
 
 ---
 

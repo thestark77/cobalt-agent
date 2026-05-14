@@ -161,7 +161,7 @@ User Prompt
     |   Select SDD phases: explore → propose → apply → verify → archive
     |
     |── Step 1: MEMORY
-    |   mem_search for prior context (Engram)
+    |   mcp_engram_mem_search for prior context (Engram)
     |
     |── Step 2: DECOMPOSE
     |   Break into independent concerns
@@ -351,7 +351,7 @@ After installation, all config lives in `~/.hermes/`:
 
 ### Memory: Engram
 
-Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
+Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mcp_engram_mem_save`, `mcp_engram_mem_search`, `mcp_engram_mem_get_observation`, `mcp_engram_mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
 
 ### File conversion: markitdown (Microsoft, MCP)
 
@@ -542,7 +542,7 @@ export TELEGRAM_BOT_TOKEN="tu-bot-token"
 export TELEGRAM_CHAT_ID="tu-chat-id"
 
 # Saltar instalacion del cron (off por defecto)
-export COBALT_INSTALL_CRON=0              # solo si NO queres el cron
+export COBALT_INSTALL_CRON=0              # solo si NO quieres el cron
 
 bash install.sh
 ```
@@ -566,7 +566,7 @@ El mismo comando. El instalador detecta instalaciones existentes y cambia a modo
 hermes chat
 ```
 
-Si saltaste las vars de Engram en la primera corrida, exportalas y volve a correr `bash install.sh` — el instalador es idempotente y solo cablea lo que falta sin tocar el resto.
+Si omitiste las variables de Engram en la primera corrida, expórtalas y vuelve a ejecutar `bash install.sh` — el instalador es idempotente y solo cablea lo que falta sin tocar el resto.
 
 ### Contexto por Proyecto
 
@@ -574,7 +574,7 @@ Hermes carga toda la configuracion de forma global desde `~/.hermes/`. Para dar 
 
 ```bash
 cp cobalt-agent/templates/CONTEXT.md ~/mi-proyecto/CONTEXT.md
-# Editalo con el stack, reglas y comandos de tu proyecto
+# Edítalo con el stack, reglas y comandos de tu proyecto
 ```
 
 Hermes lo lee automaticamente al inicio de cada sesion cuando se lanza desde ese directorio. Ver `templates/CONTEXT.md` para la plantilla completa.
@@ -594,7 +594,7 @@ Prompt del Usuario
     |   Seleccionar fases SDD: explore -> propose -> apply -> verify -> archive
     |
     |── Paso 1: MEMORIA
-    |   mem_search para contexto previo (Engram)
+    |   mcp_engram_mem_search para contexto previo (Engram)
     |
     |── Paso 2: DESCOMPONER
     |   Separar en concerns independientes
@@ -643,36 +643,36 @@ Guia corta sobre el mindset para colaborar efectivamente con agentes autonomos.
 
 No saltes a la implementacion. El error mas caro es construir lo incorrecto rapido.
 
-- Pedile al agente que explore el estado actual
-- Pregunta que restricciones existen
-- Pregunta que podria salir mal
-- Si no entendes la respuesta, pregunta por que
+- Pídele al agente que explore el estado actual
+- Pregunta qué restricciones existen
+- Pregunta qué podría salir mal
+- Si no entiendes la respuesta, pregunta por qué
 
 La pregunta correcta ahorra horas. La suposicion incorrecta las cuesta.
 
 **2. Planeacion — Decide con criterio, no con instinto**
 
-Los agentes pueden ejecutar mas rapido de lo que podes pensar. Eso es peligroso sin un plan.
+Los agentes pueden ejecutar más rápido de lo que se puede pensar. Eso es peligroso sin un plan.
 
-- Defini que significa "terminado" ANTES de empezar
+- Define qué significa "terminado" ANTES de empezar
 - Descompone metas ambiguas en fases con entregables claros
-- Cuando el agente proponga un plan, desafialo: cuales son los tradeoffs? Que consideraste y descartaste?
+- Cuando el agente proponga un plan, desafíalo: ¿cuáles son los tradeoffs? ¿Qué consideraste y descartaste?
 
-**3. Versionamiento — Medi el progreso, no lo asumas**
+**3. Versionamiento — Mide el progreso, no lo asumas**
 
-Iteracion estructurada le gana a la repeticion ciega:
+La iteración estructurada le gana a la repetición ciega:
 
-- **Un objetivo por version** — documentado en un archivo, no en tu cabeza
+- **Un objetivo por versión** — documentado en un archivo, no en la cabeza
 - **Una checklist de tests** — con criterios pass/fail y porcentaje de cobertura
-- **Output medible** — tokens, duracion, precision. Si no lo podes medir, no lo podes mejorar.
-- **Archiva resultados** — la memoria del agente (y la tuya) se degrada. Escribi las cosas.
+- **Output medible** — tokens, duración, precisión. Si no se puede medir, no se puede mejorar.
+- **Archiva resultados** — la memoria del agente (y la del usuario) se degrada. Escribe las cosas.
 
 ### Reglas de Engagement
 
-- **Nunca confies, siempre verifica.** El agente te va a decir que funciona. Hacelo probarlo.
-- **Da contexto, no instrucciones.** "Arregla el bug de login" falla. "Los usuarios reportan 401 en /api/auth despues del token refresh — investiga el middleware" tiene exito.
-- **Corregi temprano, no seguido.** Una correccion clara al principio vale mas que diez parches despues.
-- **Tu trabajo es pensar.** El trabajo del agente es ejecutar. Si no estas pensando, no estas liderando.
+- **Nunca confíes, siempre verifica.** El agente dirá que funciona. Hazlo probarlo.
+- **Da contexto, no instrucciones.** "Arregla el bug de login" falla. "Los usuarios reportan 401 en /api/auth después del token refresh — investiga el middleware" tiene éxito.
+- **Corrige temprano, no seguido.** Una corrección clara al principio vale más que diez parches después.
+- **El trabajo del usuario es pensar.** El trabajo del agente es ejecutar. Sin pensamiento no hay liderazgo.
 
 ---
 
@@ -686,7 +686,7 @@ Iteracion estructurada le gana a la repeticion ciega:
 
 ### Memoria: Engram
 
-La memoria la provee [Engram](https://github.com/Gentleman-Programming/engram) via MCP. Es self-hosted, gratis, y expone 19 herramientas MCP (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). El orquestador corre un protocolo de memoria estricto y determinista inyectado en cada turno — guarda en cada decisión/bugfix/discovery, busca antes de tareas no triviales, y escribe un session summary antes de cerrar. El protocolo es por reglas, no por decisión del LLM.
+La memoria la provee [Engram](https://github.com/Gentleman-Programming/engram) via MCP. Es self-hosted, gratis, y expone 19 herramientas MCP (`mcp_engram_mem_save`, `mcp_engram_mem_search`, `mcp_engram_mem_get_observation`, `mcp_engram_mem_session_summary`, etc.). El orquestador corre un protocolo de memoria estricto y determinista inyectado en cada turno — guarda en cada decisión/bugfix/discovery, busca antes de tareas no triviales, y escribe un session summary antes de cerrar. El protocolo es por reglas, no por decisión del LLM.
 
 ### Monitoreo de patch drift
 
