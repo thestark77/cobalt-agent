@@ -77,16 +77,37 @@ cd cobalt-agent
 bash install.sh
 ```
 
-The installer runs 8 steps autonomously:
+The installer runs 9 steps autonomously:
 
 1. **Prerequisites** — Checks Python 3.11+, git, curl, pip
 2. **Hermes Agent** — Clones and installs in `~/.hermes/hermes-agent/`
 3. **OpenCode Go** — Installs free model provider (kimi-k2.6, deepseek-v4)
 4. **Source Patch** — Applies routing hook to `delegate_tool.py` (reversible)
-5. **Plugin** — Deploys cobalt-routing to `~/.hermes/plugins/`
-6. **Configuration** — SOUL.md, config.yaml, honcho.json template
+5. **Plugin** — Deploys cobalt-routing to `~/.hermes/plugins/` (routing + tool guard + skills + memory protocol)
+6. **Configuration** — SOUL.md, config.yaml, Engram MCP server wiring
 7. **Skills** — Installs 10 curated skills
-8. **Verification** — 6-point check (binary, plugin, patch, SOUL, config, version)
+8. **Patch verify automation** — Daily cron job with Telegram alerts when Hermes drifts the patch
+9. **Verification** — 6-point check (binary, plugin, patch, SOUL, config, version)
+
+### Required configuration (the only thing you need to set)
+
+```bash
+# Engram Cloud backend (memory)
+export ENGRAM_CLOUD_SERVER="https://your-engram.host"
+export ENGRAM_CLOUD_TOKEN="your-token"
+export ENGRAM_CLOUD_AUTOSYNC=1            # optional, recommended
+
+# Telegram alerts on patch drift (optional but recommended on a VPS)
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
+
+# Skip cron job entirely (off by default)
+export COBALT_INSTALL_CRON=0              # only if you don't want the cron
+
+bash install.sh
+```
+
+The installer detects these env vars and wires everything. Everything else is unattended.
 
 ### Update
 
@@ -108,12 +129,11 @@ Run the exact same command. The installer detects existing installations and swi
 ### After Installation
 
 ```bash
-# Set your Honcho API key (free at https://app.honcho.dev)
-nano ~/.hermes/honcho.json
-
-# Start
+# Start Hermes
 hermes chat
 ```
+
+If you skipped the Engram env vars on first run, export them and re-run `bash install.sh` — the installer is idempotent and will simply wire the missing pieces (Engram MCP, cron) without touching anything else.
 
 ### Per-Project Context
 
@@ -320,12 +340,29 @@ After installation, all config lives in `~/.hermes/`:
 
 | File | Purpose |
 |---|---|
-| `config.yaml` | Model defaults, delegation settings, plugin list |
-| `SOUL.md` | Orchestrator instructions (delegation rules, triage, format) |
-| `honcho.json` | Memory provider credentials (add your API key here) |
-| `plugins/cobalt-routing/` | Plugin source (10 files) |
+| `config.yaml` | Model defaults, delegation settings, plugin list, Engram MCP server |
+| `SOUL.md` | Orchestrator instructions (delegation rules, triage, memory protocol, format) |
+| `cobalt-cron.env` | Token storage for the patch-verify cron (mode 600) |
+| `cobalt-verify-patch.sh` | Daily verifier script (managed by install.sh) |
+| `cobalt-cron.log` | Output log from the verify cron |
+| `plugins/cobalt-routing/` | Plugin source |
 | `plugins/cobalt-routing/presets.yaml` | Model assignments per task_type |
 | `skills/` | 10 curated skills (loaded by sub-agents on demand) |
+
+### Memory: Engram (no Honcho)
+
+Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
+
+Sub-agents automatically get a "save discoveries before returning" rider appended to their goal so nothing decided inside a delegation is lost.
+
+### Patch drift monitoring
+
+Hermes ships releases weekly. The source patch in `delegate_tool.py` could break on any release. cobalt-agent runs **two layers** of monitoring:
+
+- **GitHub Action** (`.github/workflows/patch-verify.yml`) — runs daily against the latest Hermes release upstream and opens an issue automatically if the patch fails.
+- **VPS cron** (`scripts/verify-patch.sh`) — runs daily on your installed Hermes; sends a Telegram alert if drift is detected. Installed automatically when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are exported during install.
+
+The cron entry is **idempotent**: re-running install.sh updates the entry only when it changed, otherwise leaves it alone.
 
 ### Installed Skills
 
@@ -381,11 +418,11 @@ cobalt-agent checks Hermes version at install time and at plugin load time:
 
 | Hermes Version | Status | Behavior |
 |---|---|---|
-| 0.12.x | Compatible | Full functionality |
-| 0.13.x - 0.99.x | Warning | May work, not validated |
+| 0.13.x | Compatible | Full functionality (tested baseline) |
+| 0.14.x - 0.99.x | Warning | May work, not validated |
 | >= 1.0.0 | Error | Blocked — breaking changes expected |
 
-The source patch (`patches/apply_routing_patch.py`) uses pattern matching, not line numbers, so it survives minor Hermes updates. If the patch can't be applied, routing falls back to inference-only mode (no model override, but task_type classification and skill injection still work).
+The source patch (`patches/apply_routing_patch.py`) uses pattern matching, not line numbers, so it survives minor Hermes updates. If the patch can't be applied, routing falls back to inference-only mode (no model override, but task_type classification and skill injection still work). Patch drift is monitored daily via GitHub Action + VPS cron with Telegram alerts.
 
 ---
 
@@ -459,16 +496,37 @@ cd cobalt-agent
 bash install.sh
 ```
 
-El instalador ejecuta 8 pasos de forma autonoma:
+El instalador ejecuta 9 pasos de forma autonoma:
 
 1. **Prerrequisitos** — Verifica Python 3.11+, git, curl, pip
 2. **Hermes Agent** — Clona e instala en `~/.hermes/hermes-agent/`
 3. **OpenCode Go** — Instala proveedor gratuito de modelos (kimi-k2.6, deepseek-v4)
 4. **Source Patch** — Aplica hook de routing a `delegate_tool.py` (reversible)
-5. **Plugin** — Despliega cobalt-routing en `~/.hermes/plugins/`
-6. **Configuracion** — SOUL.md, config.yaml, plantilla honcho.json
+5. **Plugin** — Despliega cobalt-routing en `~/.hermes/plugins/` (routing + tool guard + skills + memory protocol)
+6. **Configuracion** — SOUL.md, config.yaml, registro de Engram como servidor MCP
 7. **Skills** — Instala 10 skills curados
-8. **Verificacion** — Chequeo de 6 puntos (binario, plugin, patch, SOUL, config, version)
+8. **Patch verify automation** — Cron diario con alertas Telegram cuando Hermes rompe el patch
+9. **Verificacion** — Chequeo de 6 puntos (binario, plugin, patch, SOUL, config, version)
+
+### Configuracion requerida (lo unico que necesitas tocar)
+
+```bash
+# Backend de memoria — Engram Cloud
+export ENGRAM_CLOUD_SERVER="https://tu-engram.host"
+export ENGRAM_CLOUD_TOKEN="tu-token"
+export ENGRAM_CLOUD_AUTOSYNC=1            # opcional, recomendado
+
+# Alertas Telegram cuando el patch se rompe (opcional pero recomendado en VPS)
+export TELEGRAM_BOT_TOKEN="tu-bot-token"
+export TELEGRAM_CHAT_ID="tu-chat-id"
+
+# Saltar instalacion del cron (off por defecto)
+export COBALT_INSTALL_CRON=0              # solo si NO queres el cron
+
+bash install.sh
+```
+
+El instalador detecta las vars y cablea todo. Lo demas es desatendido.
 
 ### Actualizacion
 
@@ -483,12 +541,11 @@ El mismo comando. El instalador detecta instalaciones existentes y cambia a modo
 ### Despues de instalar
 
 ```bash
-# Configura tu API key de Honcho (gratis en https://app.honcho.dev)
-nano ~/.hermes/honcho.json
-
-# Inicia
+# Inicia Hermes
 hermes chat
 ```
+
+Si saltaste las vars de Engram en la primera corrida, exportalas y volve a correr `bash install.sh` — el instalador es idempotente y solo cablea lo que falta sin tocar el resto.
 
 ### Contexto por Proyecto
 
@@ -602,9 +659,20 @@ Iteracion estructurada le gana a la repeticion ciega:
 
 | Version Hermes | Estado | Comportamiento |
 |---|---|---|
-| 0.12.x | Compatible | Funcionalidad completa |
-| 0.13.x - 0.99.x | Warning | Puede funcionar, no validado |
+| 0.13.x | Compatible | Funcionalidad completa (baseline tested) |
+| 0.14.x - 0.99.x | Warning | Puede funcionar, no validado |
 | >= 1.0.0 | Error | Bloqueado — se esperan cambios incompatibles |
+
+### Memoria: Engram (sin Honcho)
+
+La memoria la provee [Engram](https://github.com/Gentleman-Programming/engram) via MCP. Es self-hosted, gratis, y expone 19 herramientas MCP (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). El orquestador corre un protocolo de memoria estricto y determinista inyectado en cada turno — guarda en cada decisión/bugfix/discovery, busca antes de tareas no triviales, y escribe un session summary antes de cerrar. El protocolo es por reglas, no por decisión del LLM.
+
+### Monitoreo de patch drift
+
+Hermes saca releases semanales. El patch puede romperse en cualquiera. cobalt-agent corre **dos capas** de monitoreo:
+
+- **GitHub Action** — diario contra el ultimo release de Hermes; abre un issue automatico si el patch falla.
+- **VPS cron** — diario sobre tu instalacion local; manda alerta Telegram si detecta drift. Se instala automaticamente si exportaste `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` al correr el installer.
 
 ---
 
