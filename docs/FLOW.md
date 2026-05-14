@@ -29,7 +29,7 @@
 | 6 | Tasks | `todo` tool — atomic task breakdown | tasks | Orchestrator |
 | 7 | Apply | `delegate_task` — implement each task | apply | Sub-agent (K2.6) |
 | 8 | Verify | `delegate_task` — run tests, validate output | verify | Sub-agent (pro) |
-| 9 | Archive | `honcho_conclude` — save learnings, decisions, outcomes | archive | Orchestrator |
+| 9 | Archive | `mem_session_summary` / `mem_save` (Engram) — save learnings, decisions, outcomes | archive | Orchestrator |
 
 ---
 
@@ -54,24 +54,26 @@
 
 The orchestrator is BLOCKED from calling execution tools directly. Returns error forcing delegation.
 
-**Allowed tools (16):**
-delegate_task, memory, cobalt_preset, clarify, todo, skills_list, skill_view, skill_manage, send_message, session_search, cronjob, honcho_profile, honcho_search, honcho_reasoning, honcho_context, honcho_conclude
+**Allowed tools:**
+delegate_task, memory, cobalt_preset, clarify, todo, skills_list, skill_view, skill_manage, send_message, session_search, cronjob, mem_save, mem_search, mem_get_observation, mem_context, mem_session_summary, mem_save_prompt, mem_suggest_topic_key, mem_current_project, mem_update
 
 **Sub-agents:** Unrestricted (detected by task_id prefix "sa-")
 
 ---
 
-## 5. Memory System (Honcho)
+## 5. Memory System (Engram via MCP)
 
-### Mechanical (automatic, every turn):
-1. `system_prompt_block()` — injects peer card + memory mode into system prompt
-2. `prefetch(user_message)` — semantic search of relevant memories BEFORE model responds
-3. `sync_turn()` — saves conversation messages asynchronously AFTER model responds
+Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram), a self-hosted MCP server. The orchestrator follows a strict, rule-based protocol injected on every turn (see `src/memory_protocol.py`).
 
 ### Orchestrator-initiated (via tools):
-- `honcho_search` — ALWAYS before delegating (avoid redundant scouts)
-- `honcho_conclude` — ALWAYS after completing a task (persist learnings)
-- `honcho_reasoning` — for complex questions about patterns/preferences
+- `mem_search` — ALWAYS before delegating (avoid redundant scouts)
+- `mem_context` — fast recent-history lookup before falling back to mem_search
+- `mem_get_observation` — get full untruncated content of a search result
+- `mem_save` — IMMEDIATELY after any decision, bugfix, discovery, pattern, or convention
+- `mem_session_summary` — MANDATORY before saying "done"/"listo"; persists Goal / Discoveries / Accomplished / Next Steps / Relevant Files
+
+### Sub-agent rider (automatic):
+Every delegated goal is suffixed with a "[MEMORY — sub-agent rule]" block telling the sub-agent to `mem_save` discoveries before returning. The orchestrator never sees sub-agent context, so the sub-agent persists or it is lost.
 
 ### Cross-language:
 Confirmed working: save in English, search in Spanish (and vice versa).
@@ -160,11 +162,11 @@ Located at `~/.hermes/SOUL.md`. Loaded every turn. Must be <800 tokens.
 Key rules:
 1. ABSOLUTE RULE: Never call execution tools directly
 2. MANDATORY TRIAGE (Step 0): Before ANY work, decide if SDD applies and WHICH phases
-3. ALWAYS honcho_search before delegating
+3. ALWAYS mem_search before delegating (Engram)
 4. ALWAYS set task_type on every delegation
 5. ALWAYS maximize parallelism for independent tasks
 6. ALWAYS include WHY in goals (sub-agent needs context to curate response)
-7. ALWAYS honcho_conclude after completing work
+7. ALWAYS mem_session_summary after completing work
 8. Respond in user's language
 
 ### SDD Triage Rules:
@@ -250,7 +252,7 @@ conversation history for delegate_task or todo calls). If active:
 Checks last 10 messages in conversation_history for:
 - `delegate_task` tool_use calls (execution in progress)
 - `todo` tool_use calls (task breakdown active)
-- NOT triggered if last action was `honcho_conclude` (plan already closed)
+- NOT triggered if last action was `mem_session_summary` (plan already closed)
 
 ---
 
@@ -274,7 +276,7 @@ Track every execution cycle with artifacts for traceability and learning.
 1. **Init**: On first Apply delegation of an SDD cycle, `version_manager.init_version()` creates the folder and saves the original prompt
 2. **Plan**: After triage + decomposition, save phases and tasks to plan.md
 3. **Mid-session additions**: New user instructions appended to plan.md with timestamp
-4. **Close**: After honcho_conclude, generate changelog from completed tasks
+4. **Close**: After mem_session_summary, generate changelog from completed tasks
 
 ### Version numbering:
 - Auto-increments patch from latest existing version
@@ -315,7 +317,7 @@ Automated script that:
 4. Installs skills via native `hermes skills install`
 5. Writes SOUL.md
 6. Prompts user for: API keys, provider selection, platform
-7. Writes config.yaml + honcho.json
+7. Writes config.yaml with Engram MCP server (when ENGRAM_CLOUD_* env vars present)
 8. Runs verification
 
 No other interaction needed. Fully unattended after API key input.

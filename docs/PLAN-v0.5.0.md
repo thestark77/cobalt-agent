@@ -48,7 +48,7 @@
 - No PROGRESS.md (Hermes has `todo`)
 - No feedback.md generation (adds complexity, defer to v0.6.0)
 - No screenshots/ (not relevant for CLI)
-- No compaction hook (Hermes manages this natively, we use honcho for persistence)
+- No compaction hook (Hermes manages this natively, persistence handled by Engram via MCP)
 - No knowledge-graph integration (defer)
 
 ---

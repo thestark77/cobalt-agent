@@ -108,7 +108,7 @@ def _has_active_plan(conversation_history: list = None) -> bool:
                         name = part.get("name", "")
                         if name in ("delegate_task", "todo"):
                             return True
-                        if name in ("mem_session_summary", "honcho_conclude"):
+                        if name == "mem_session_summary":
                             return False
         elif isinstance(content, str):
             if "TASK:" in content and "→" in content:

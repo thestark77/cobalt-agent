@@ -29,7 +29,7 @@ A metric that PASSES in version N and FAILS in version N+1 is a **regression**.
 | Triage present | 100% of turns | Look for "TASK:" or "CONVERSATION:" in first response line |
 | Phases executed | All selected phases actually run | Match stated phases vs actual delegations |
 | Propose before Apply | If Propose selected, user was consulted | Check for user interaction before apply delegations |
-| Memory bookends | honcho_search at start, honcho_conclude at end | agent.log tool calls |
+| Memory bookends | mem_search at start, mem_session_summary at end | agent.log tool calls |
 
 ### 4. Mechanical Enforcement
 | Metric | Target | How to measure |
@@ -124,5 +124,5 @@ From session JSON:
 # Extract triage classification from first assistant response
 # Extract task_types from delegate_task calls
 # Extract goals to verify curation suffixes
-# Count honcho_search and honcho_conclude calls
+# Count mem_search and mem_session_summary calls
 ```

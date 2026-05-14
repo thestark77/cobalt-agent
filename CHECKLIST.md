@@ -7,7 +7,7 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 ## Infrastructure
 
 - [ ] `python3 health_check.py` — OpenCode Go OK
-- [ ] `python3 health_check.py` — Honcho OK
+- [ ] `python3 health_check.py` — Engram MCP OK (`engram` binary in PATH + env vars set)
 - [ ] `python3 health_check.py` — cobalt-routing OK
 - [ ] `hermes doctor` — no errors
 - [ ] `hermes plugins list` — cobalt-routing enabled
@@ -16,7 +16,7 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 
 - [ ] Orchestrator CANNOT call web_search (gets BLOCKED message)
 - [ ] Orchestrator CAN call delegate_task
-- [ ] Orchestrator CAN call honcho_search / honcho_conclude
+- [ ] Orchestrator CAN call mem_search / mem_session_summary
 - [ ] Sub-agents CAN call any tool (web_search, write_file, etc.)
 - [ ] No BLOCKED entries in agent.log for sub-agents (sa- prefix)
 
@@ -36,11 +36,12 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 - [ ] "Leer/analizar/read" → explore
 - [ ] "Diseñar/architecture" → design
 
-## Memory (Honcho)
+## Memory (Engram)
 
-- [ ] Prefetch fires automatically (check agent.log for "Honcho session")
-- [ ] honcho_search returns relevant results
-- [ ] honcho_conclude saves successfully
+- [ ] `engram` binary in PATH; `ENGRAM_CLOUD_SERVER` / `ENGRAM_CLOUD_TOKEN` exported
+- [ ] mem_search returns relevant results
+- [ ] mem_save persists and is recoverable via mem_get_observation
+- [ ] mem_session_summary saves at end of every session
 - [ ] Cross-language search works (save EN, search ES)
 
 ## Curation
@@ -85,7 +86,7 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 - [ ] Tasks: atomic breakdown via todo tool
 - [ ] Apply: code written by sub-agent
 - [ ] Verify: tests run and pass
-- [ ] Archive: learnings saved to Honcho
+- [ ] Archive: learnings saved to Engram via mem_save / mem_session_summary
 
 ---
 

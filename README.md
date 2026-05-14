@@ -117,7 +117,7 @@ Run the exact same command. The installer detects existing installations and swi
 - Re-applies source patch (idempotent)
 - Replaces plugin files with latest version
 - Merges config without overwriting your settings
-- Preserves credentials (honcho.json, provider auth)
+- Preserves credentials (provider auth, Engram tokens, Telegram tokens)
 
 ### Windows
 
@@ -161,7 +161,7 @@ User Prompt
     |   Select SDD phases: explore → propose → apply → verify → archive
     |
     |── Step 1: MEMORY
-    |   honcho_search for prior context
+    |   mem_search for prior context (Engram)
     |
     |── Step 2: DECOMPOSE
     |   Break into independent concerns
@@ -349,7 +349,7 @@ After installation, all config lives in `~/.hermes/`:
 | `plugins/cobalt-routing/presets.yaml` | Model assignments per task_type |
 | `skills/` | 10 curated skills (loaded by sub-agents on demand) |
 
-### Memory: Engram (no Honcho)
+### Memory: Engram
 
 Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
 
@@ -557,7 +557,7 @@ El mismo comando. El instalador detecta instalaciones existentes y cambia a modo
 - Re-aplica el source patch (idempotente)
 - Reemplaza archivos del plugin con la ultima version
 - Fusiona la config sin sobreescribir tus ajustes
-- Preserva credenciales (honcho.json, auth del proveedor)
+- Preserva credenciales (auth del proveedor, tokens de Engram y Telegram)
 
 ### Despues de instalar
 
@@ -594,7 +594,7 @@ Prompt del Usuario
     |   Seleccionar fases SDD: explore -> propose -> apply -> verify -> archive
     |
     |── Paso 1: MEMORIA
-    |   honcho_search para contexto previo
+    |   mem_search para contexto previo (Engram)
     |
     |── Paso 2: DESCOMPONER
     |   Separar en concerns independientes
@@ -684,7 +684,7 @@ Iteracion estructurada le gana a la repeticion ciega:
 | 0.14.x - 0.99.x | Warning | Puede funcionar, no validado |
 | >= 1.0.0 | Error | Bloqueado — se esperan cambios incompatibles |
 
-### Memoria: Engram (sin Honcho)
+### Memoria: Engram
 
 La memoria la provee [Engram](https://github.com/Gentleman-Programming/engram) via MCP. Es self-hosted, gratis, y expone 19 herramientas MCP (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). El orquestador corre un protocolo de memoria estricto y determinista inyectado en cada turno — guarda en cada decisión/bugfix/discovery, busca antes de tareas no triviales, y escribe un session summary antes de cerrar. El protocolo es por reglas, no por decisión del LLM.
 

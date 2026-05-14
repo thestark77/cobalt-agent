@@ -9,8 +9,8 @@ This complements (and will eventually be replaced by) a native Hermes
 memory plugin that calls Engram on the prefetch/sync_turn lifecycle
 mechanically.
 
-Replaces the previous Honcho integration. Engram is self-hosted, MCP-
-native, and exposes its tools through Hermes's MCP server config.
+Engram is self-hosted, MCP-native, and exposes its tools through
+Hermes's MCP server config.
 """
 
 import logging
