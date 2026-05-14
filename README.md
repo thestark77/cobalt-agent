@@ -379,7 +379,7 @@ The cron entry is **idempotent**: re-running install.sh updates the entry only w
 | interface-design | dammyjay93 | Admin panels, backoffice, SaaS interfaces |
 | e2e-testing-patterns | wshobson/agents | E2E test patterns, fixtures, page objects |
 | error-handling-patterns | wshobson/agents | Error/result types, retry, circuit breakers |
-| postgresql-table-design | wshobson/agents | Schema, migrations, indexing |
+| postgresql | wshobson/agents | Schema, migrations, indexing |
 | judgment-day | gentleman-programming/sdd-agent-team | Dual-review / adversarial review |
 | branch-pr | gentleman-programming/sdd-agent-team | PR strategy, branch naming, review flow |
 | skill-creator | gentleman-programming/sdd-agent-team | Build new skills |

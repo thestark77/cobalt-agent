@@ -474,6 +474,16 @@ log "Hermes Agent v$FINAL_VER ready"
 header "Step 3/9: OpenCode Go Provider"
 # ============================================================================
 
+# Make sure ~/.local/bin (where we drop OpenCode/Engram symlinks) is on PATH
+# so subsequent steps + future shells can find them.
+mkdir -p "$HOME/.local/bin"
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+    fi
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+
 if [ "$HAS_NPM" -eq 1 ]; then
     if ! command -v opencode &>/dev/null; then
         log "Installing OpenCode CLI (opencode-ai on npm)..."
@@ -482,11 +492,44 @@ if [ "$HAS_NPM" -eq 1 ]; then
         if npm install -g opencode-ai 2>/dev/null \
             || npm install -g opencode 2>/dev/null \
             || npm install -g @sst-software/opencode 2>/dev/null; then
+
+            # On non-root npm installs, the global bin directory is usually
+            # `$(npm prefix -g)/bin` (e.g. ~/.nvm/versions/node/*/bin or
+            # ~/.npm-global/bin). That dir is NOT always in the user's PATH,
+            # so a fresh install can leave `opencode` installed but invisible.
+            # Symlink it into ~/.local/bin (which we just added to PATH).
+            NPM_GLOBAL_BIN=""
+            if command -v npm &>/dev/null; then
+                NPM_PREFIX=$(npm prefix -g 2>/dev/null || true)
+                if [ -n "$NPM_PREFIX" ] && [ -x "$NPM_PREFIX/bin/opencode" ]; then
+                    NPM_GLOBAL_BIN="$NPM_PREFIX/bin/opencode"
+                fi
+            fi
+            if [ -z "$NPM_GLOBAL_BIN" ]; then
+                # Fallback: scan a few common locations
+                for candidate in \
+                    "$HOME/.npm-global/bin/opencode" \
+                    "$HOME/.nvm/versions/node/"*/bin/opencode \
+                    "/usr/local/bin/opencode" \
+                    "/usr/bin/opencode"; do
+                    if [ -x "$candidate" ]; then
+                        NPM_GLOBAL_BIN="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if [ -n "$NPM_GLOBAL_BIN" ]; then
+                ln -sf "$NPM_GLOBAL_BIN" "$HOME/.local/bin/opencode"
+                hash -r 2>/dev/null || true
+            fi
+
             if command -v opencode &>/dev/null; then
                 log "OpenCode CLI installed ($(command -v opencode))"
             else
-                warn "OpenCode CLI install reported success but 'opencode' not in PATH."
-                warn "Check 'npm root -g' and ensure that dir is in your PATH."
+                warn "OpenCode CLI install reported success but the binary is unreachable."
+                warn "Find it with: npm prefix -g (look in <prefix>/bin/opencode)"
+                warn "and symlink it: ln -sf <path> ~/.local/bin/opencode"
             fi
         else
             warn "OpenCode CLI install failed. You'll need to configure the provider manually."
@@ -756,7 +799,10 @@ SKILLS=(
     "skills-sh/dammyjay93/interface-design/interface-design"
     "skills-sh/wshobson/agents/e2e-testing-patterns"
     "skills-sh/wshobson/agents/error-handling-patterns"
-    "skills-sh/wshobson/agents/postgresql-table-design"
+    # wshobson/agents stores postgres skill as `postgresql`
+    # (path: plugins/database-design/skills/postgresql). The previous
+    # identifier `postgresql-table-design` did not exist upstream.
+    "skills-sh/wshobson/agents/postgresql"
     "skills-sh/gentleman-programming/sdd-agent-team/judgment-day"
     "skills-sh/gentleman-programming/sdd-agent-team/branch-pr"
     "skills-sh/gentleman-programming/sdd-agent-team/skill-creator"
@@ -764,7 +810,9 @@ SKILLS=(
     # v0.8.0 additions — design / browser automation
     "skills-sh/microsoft/playwright-cli/playwright-cli"
     "skills-sh/pbakaus/impeccable/impeccable"
-    "skills-sh/alchaincyf/huashu-design/huashu-design"
+    # alchaincyf/huashu-design has SKILL.md in the repo root (no subdir),
+    # so the identifier omits the trailing skill segment.
+    "skills-sh/alchaincyf/huashu-design"
     "skills-sh/nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max"
     "skills-sh/Leonxlnx/taste-skill/gpt-tasteskill"
 )
@@ -775,7 +823,7 @@ SKILL_NAMES=(
     "interface-design"
     "e2e-testing-patterns"
     "error-handling-patterns"
-    "postgresql-table-design"
+    "postgresql"
     "judgment-day"
     "branch-pr"
     "skill-creator"
