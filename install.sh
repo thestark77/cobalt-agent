@@ -126,13 +126,118 @@ setup_verify_cron() {
     fi
 }
 
+_install_engram_binary() {
+    # Auto-installer for the Engram CLI/MCP binary.
+    # Pulls the latest official release tarball, extracts to ~/.local/bin/engram,
+    # and verifies the resulting binary runs. Idempotent + safe to re-run.
+    local arch os asset url tmp_dir
+    case "$(uname -s)" in
+        Linux)  os="linux"   ;;
+        Darwin) os="darwin"  ;;
+        *)
+            warn "Unsupported OS '$(uname -s)' for auto-install. Install engram manually."
+            return 1
+            ;;
+    esac
+    case "$(uname -m)" in
+        x86_64|amd64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *)
+            warn "Unsupported arch '$(uname -m)' for auto-install. Install engram manually."
+            return 1
+            ;;
+    esac
+
+    log "Resolving latest Engram release..."
+    local release_json tag tarball
+    release_json=$(curl -fsSL https://api.github.com/repos/Gentleman-Programming/engram/releases/latest 2>/dev/null || true)
+    if [ -z "$release_json" ]; then
+        warn "Could not fetch Engram release metadata (network?). Skipping auto-install."
+        return 1
+    fi
+
+    tag=$(echo "$release_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name',''))" 2>/dev/null)
+    if [ -z "$tag" ]; then
+        warn "Could not parse Engram release tag. Skipping auto-install."
+        return 1
+    fi
+
+    # Tarball name pattern: engram_<version>_<os>_<arch>.tar.gz  (version w/o the 'v')
+    local version="${tag#v}"
+    tarball="engram_${version}_${os}_${arch}.tar.gz"
+    url="https://github.com/Gentleman-Programming/engram/releases/download/${tag}/${tarball}"
+
+    tmp_dir=$(mktemp -d) || return 1
+    log "Downloading Engram ${tag} (${os}/${arch})..."
+    if ! curl -fsSL "$url" -o "$tmp_dir/$tarball"; then
+        warn "Engram download failed from $url"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    tar -xzf "$tmp_dir/$tarball" -C "$tmp_dir" 2>/dev/null || {
+        warn "Engram tarball extraction failed"
+        rm -rf "$tmp_dir"
+        return 1
+    }
+
+    local extracted_bin
+    extracted_bin=$(find "$tmp_dir" -maxdepth 2 -name engram -type f -executable 2>/dev/null | head -n1)
+    if [ -z "$extracted_bin" ]; then
+        warn "engram binary not found inside the tarball"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    mv "$extracted_bin" "$HOME/.local/bin/engram"
+    chmod +x "$HOME/.local/bin/engram"
+    rm -rf "$tmp_dir"
+
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        if ! grep -q '\.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        fi
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+    hash -r 2>/dev/null || true
+
+    if "$HOME/.local/bin/engram" --version &>/dev/null; then
+        log "Engram installed: $("$HOME/.local/bin/engram" --version 2>&1 | head -n1)"
+        return 0
+    else
+        warn "Engram binary installed at ~/.local/bin/engram but failed --version check"
+        return 1
+    fi
+}
+
 check_engram_binary() {
+    # Soft-detect first (PATH miss is common right after installing to ~/.local/bin)
     if command -v engram &>/dev/null; then
         log "engram binary found: $(command -v engram)"
         return 0
     fi
-    warn "engram binary not in PATH. Memory protocol will be inactive until installed."
-    warn "Install via: https://github.com/Gentleman-Programming/engram (curl install or 'go install')"
+    if [ -x "$HOME/.local/bin/engram" ]; then
+        export PATH="$HOME/.local/bin:$PATH"
+        hash -r 2>/dev/null || true
+        log "engram binary found: $HOME/.local/bin/engram (added ~/.local/bin to PATH)"
+        return 0
+    fi
+
+    # Only auto-install when the user actually wants Engram (env vars present);
+    # otherwise we'd download a binary nobody asked for.
+    if [ "${ENGRAM_ENABLED:-0}" != "1" ]; then
+        warn "engram binary not in PATH and ENGRAM_CLOUD_SERVER/TOKEN not set."
+        warn "Export them and re-run installer to enable memory."
+        return 1
+    fi
+
+    log "engram binary missing but Engram Cloud env vars set — auto-installing..."
+    if _install_engram_binary; then
+        return 0
+    fi
+    warn "Engram auto-install failed. Memory MCP will be inactive."
+    warn "Install manually: https://github.com/Gentleman-Programming/engram (Homebrew or download from Releases)."
     return 1
 }
 
@@ -215,7 +320,7 @@ else
     echo "  4. Source patch (delegate_tool.py routing hook)"
     echo "  5. cobalt-routing plugin (routing + tool guard + skills + memory protocol)"
     echo "  6. SOUL.md + configuration + Engram MCP server"
-    echo "  7. Skills (10 curated skills)"
+    echo "  7. Skills (15 curated skills)"
     echo "  8. Patch verify automation (cron + Telegram alerts)"
     echo "  9. Verification"
 fi
@@ -371,13 +476,24 @@ header "Step 3/9: OpenCode Go Provider"
 
 if [ "$HAS_NPM" -eq 1 ]; then
     if ! command -v opencode &>/dev/null; then
-        log "Installing OpenCode CLI..."
-        npm install -g @anthropics/opencode 2>/dev/null || npm install -g opencode 2>/dev/null || {
-            warn "OpenCode CLI install failed. You'll need to configure provider manually."
+        log "Installing OpenCode CLI (opencode-ai on npm)..."
+        # Correct npm package is `opencode-ai` (binary: `opencode`).
+        # Older fallbacks left for backwards compat with mis-named registries.
+        if npm install -g opencode-ai 2>/dev/null \
+            || npm install -g opencode 2>/dev/null \
+            || npm install -g @sst-software/opencode 2>/dev/null; then
+            if command -v opencode &>/dev/null; then
+                log "OpenCode CLI installed ($(command -v opencode))"
+            else
+                warn "OpenCode CLI install reported success but 'opencode' not in PATH."
+                warn "Check 'npm root -g' and ensure that dir is in your PATH."
+            fi
+        else
+            warn "OpenCode CLI install failed. You'll need to configure the provider manually."
             warn "Set model.base_url in ~/.hermes/config.yaml to your provider's endpoint."
-        }
+        fi
     else
-        log "OpenCode CLI already installed"
+        log "OpenCode CLI already installed ($(command -v opencode))"
     fi
 fi
 
@@ -487,6 +603,18 @@ else
     warn "Engram MCP server WILL NOT be registered. Memory protocol stays inactive."
     warn "Set the vars and re-run installer to enable Engram."
     ENGRAM_ENABLED=0
+fi
+
+# Self-healing: if Engram is desired but the binary is missing (fresh install,
+# previous run failed, user upgraded), auto-install BEFORE writing the MCP
+# entry. Otherwise config.yaml would point at a non-existent command and
+# Hermes would crash on startup.
+if [ "$ENGRAM_ENABLED" -eq 1 ]; then
+    if ! check_engram_binary; then
+        warn "Engram binary unavailable — DISABLING Engram MCP wiring for this run."
+        warn "Re-run installer once 'engram' is in PATH (Homebrew or releases tarball)."
+        ENGRAM_ENABLED=0
+    fi
 fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -664,39 +792,63 @@ log "Installing ${#SKILLS[@]} skills..."
 
 HERMES_BIN="$HOME/.local/bin/hermes"
 SKILLS_INSTALLED=0
+SKILLS_FAILED=()
+
+# Verify a skill is actually installed regardless of `hermes skills install`
+# exit code (the CLI sometimes prints "Error: Could not fetch" but still
+# returns 0 — checking the filesystem is the authoritative signal).
+skill_is_installed() {
+    local name="$1"
+    [ -f "$SKILLS_DIR/$name/SKILL.md" ]
+}
 
 for i in "${!SKILLS[@]}"; do
     name="${SKILL_NAMES[$i]}"
-    if [ -d "$SKILLS_DIR/$name" ]; then
+    identifier="${SKILLS[$i]}"
+
+    if skill_is_installed "$name"; then
         if [ "$IS_UPDATE" -eq 1 ]; then
-            if "$HERMES_BIN" skills install "${SKILLS[$i]}" --force 2>/dev/null; then
+            # Re-run install to pull latest; --force skips security re-confirm.
+            # We don't fail the run if update doesn't go through; the existing
+            # copy is still functional.
+            if "$HERMES_BIN" skills install "$identifier" --force >/dev/null 2>&1 \
+                && skill_is_installed "$name"; then
                 log "  $name (updated)"
-                SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
             else
                 log "  $name (kept existing)"
-                SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
             fi
+            SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
         else
             log "  $name (already installed)"
             SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
         fi
+        continue
+    fi
+
+    # Not present yet — attempt install. Tolerate the CLI's noisy "Error"
+    # output; trust the post-install filesystem check.
+    "$HERMES_BIN" skills install "$identifier" --force >/dev/null 2>&1 || true
+    if skill_is_installed "$name"; then
+        log "  $name (installed)"
+        SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
     else
-        if "$HERMES_BIN" skills install "${SKILLS[$i]}" --force 2>/dev/null; then
-            log "  $name (installed)"
-            SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
-        else
-            warn "  $name (failed — install manually: hermes skills install ${SKILLS[$i]})"
-        fi
+        warn "  $name (failed — try: hermes skills install $identifier --force)"
+        SKILLS_FAILED+=("$name")
     fi
 done
 
-log "$SKILLS_INSTALLED/${#SKILLS[@]} skills installed"
+if [ "${#SKILLS_FAILED[@]}" -gt 0 ]; then
+    warn "$SKILLS_INSTALLED/${#SKILLS[@]} skills installed — missing: ${SKILLS_FAILED[*]}"
+    warn "Re-run installer once upstream sources are reachable; only the missing skills will be retried."
+else
+    log "$SKILLS_INSTALLED/${#SKILLS[@]} skills installed"
+fi
 
 # ============================================================================
 header "Step 8/9: Patch verify automation"
 # ============================================================================
 
-check_engram_binary || true
+# engram binary check is handled in Step 6 (before MCP wiring) — no need to repeat.
 setup_verify_cron
 
 # ============================================================================
