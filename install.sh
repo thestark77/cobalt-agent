@@ -398,6 +398,19 @@ if [ -f "$HERMES_AGENT_DIR/pyproject.toml" ]; then
     if [ "$IS_UPDATE" -eq 1 ]; then
         log "Updating Hermes Agent..."
         cd "$HERMES_AGENT_DIR"
+
+        # The cobalt source patch in tools/delegate_tool.py creates a local
+        # diff that makes `git pull` refuse to merge upstream commits with
+        # "Your local changes would be overwritten". Discard the patched
+        # file before pulling — Step 4 re-applies the patch on the freshly
+        # pulled code afterwards. This keeps the upgrade path automatic for
+        # future Hermes versions (0.14.x, etc.).
+        if grep -q "# cobalt-routing patch" tools/delegate_tool.py 2>/dev/null; then
+            if git checkout -- tools/delegate_tool.py 2>/dev/null; then
+                log "Cleared local patch from delegate_tool.py to allow pull (Step 4 re-applies)"
+            fi
+        fi
+
         git fetch origin 2>/dev/null || warn "Could not fetch updates (network issue?)"
 
         if [ -n "$HERMES_TESTED_TAG" ]; then
