@@ -52,6 +52,17 @@ the turn instead of relying on the implicit default.
 NEVER assume "no project arg" means "all projects". It means "current
 default project" — which is one specific bucket, not a wildcard.
 
+# DO NOT CONFUSE WITH `session_search`
+
+`session_search` searches your past CONVERSATION history (Hermes's
+internal session store). It is SLOW (often 30-120 s) and DOES NOT see
+Engram persistent memory. If the user asks about memories, decisions,
+patterns, or prior work, the answer lives in Engram — call
+`mcp_engram_mem_search` / `mcp_engram_mem_context`, NEVER `session_search`.
+A `mem_search` that returns zero results does NOT mean "try the
+session log next"; it usually means the `project` filter is wrong.
+Resolve the project (see PROJECT SCOPING above) and search again.
+
 # WHEN TO SEARCH (mandatory, BEFORE acting)
 - User says: "remember", "recall", "what did we do", "recordar", "qué hicimos",
   "acordate", or references prior work → call `mcp_engram_mem_context` first, then

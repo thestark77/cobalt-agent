@@ -140,8 +140,16 @@ def _inject_routing(task_dict: dict, task_type: str) -> None:
     `<available_skills>` block Hermes already injects into every system prompt.
     """
     from router import resolve_routing, apply_dynamic_timeout
-    from memory_protocol import subagent_memory_rider
-    from markitdown_protocol import subagent_markitdown_rider
+    # Riders are optional — degrade gracefully if a sibling file is missing
+    # so a partial install doesn't break delegate_task entirely.
+    try:
+        from memory_protocol import subagent_memory_rider
+    except ImportError:
+        subagent_memory_rider = lambda: ""
+    try:
+        from markitdown_protocol import subagent_markitdown_rider
+    except ImportError:
+        subagent_markitdown_rider = lambda: ""
 
     apply_dynamic_timeout(task_type)
 
@@ -254,19 +262,45 @@ def _pre_llm_call_hook(
 
     Sub-agents receive nothing (their context comes from the goal suffix).
     Orchestrator receives all blocks concatenated, every turn.
-    """
-    from sdd_triage import pre_llm_call_hook as triage_hook
-    from memory_protocol import build_memory_protocol_block
-    from markitdown_protocol import build_markitdown_protocol_block
 
-    triage = triage_hook(
-        user_message=user_message,
-        task_id=task_id,
-        conversation_history=conversation_history,
-        **kwargs,
-    )
-    memory = build_memory_protocol_block(task_id=task_id)
-    markdown = build_markitdown_protocol_block(task_id=task_id)
+    Imports are wrapped per-module so a missing sibling file (e.g. after a
+    partial install or a stale __pycache__) degrades gracefully to the
+    blocks that ARE available instead of raising ImportError and skipping
+    every block — which left the model with zero protocol guidance and
+    caused the timeout-loop observed on 2026-05-14 session
+    20260514_113515_94636c.
+    """
+    triage_hook = None
+    build_memory_protocol_block = None
+    build_markitdown_protocol_block = None
+    try:
+        from sdd_triage import pre_llm_call_hook as triage_hook
+    except ImportError as exc:
+        logger.warning("cobalt-routing: sdd_triage import failed (%s)", exc)
+    try:
+        from memory_protocol import build_memory_protocol_block
+    except ImportError as exc:
+        logger.warning(
+            "cobalt-routing: memory_protocol import failed (%s) — "
+            "Engram protocol WILL NOT be injected this turn. Re-run install.sh.",
+            exc,
+        )
+    try:
+        from markitdown_protocol import build_markitdown_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: markitdown_protocol import failed (%s)", exc)
+
+    if triage_hook is None:
+        triage = None
+    else:
+        triage = triage_hook(
+            user_message=user_message,
+            task_id=task_id,
+            conversation_history=conversation_history,
+            **kwargs,
+        )
+    memory = build_memory_protocol_block(task_id=task_id) if build_memory_protocol_block else None
+    markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
 
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
     parts = [p for p in (triage_ctx, memory, markdown) if p]

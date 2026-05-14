@@ -31,6 +31,9 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # Engram memory tools — orchestrator accesses memory directly.
     # Hermes prefixes MCP tools as mcp_<server>_<tool>, so the engram
     # server's `mem_save` becomes `mcp_engram_mem_save` when invoked.
+    # All of these are CRUD-on-memory; the orchestrator must be allowed
+    # to call them directly so it does not waste a sub-agent round trip
+    # on a one-shot delete / stats / timeline lookup.
     "mcp_engram_mem_save",
     "mcp_engram_mem_search",
     "mcp_engram_mem_get_observation",
@@ -40,6 +43,18 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_engram_mem_suggest_topic_key",
     "mcp_engram_mem_current_project",
     "mcp_engram_mem_update",
+    "mcp_engram_mem_delete",
+    "mcp_engram_mem_stats",
+    "mcp_engram_mem_timeline",
+    "mcp_engram_mem_session_start",
+    "mcp_engram_mem_session_end",
+    "mcp_engram_mem_compare",
+    "mcp_engram_mem_judge",
+    "mcp_engram_mem_doctor",
+    "mcp_engram_mem_capture_passive",
+    "mcp_engram_mem_merge_projects",
+    # markitdown MCP (Microsoft) — file conversion, cheap, no need to delegate.
+    "mcp_markitdown_convert_to_markdown",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.

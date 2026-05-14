@@ -625,12 +625,21 @@ PLUGIN_FILES=(
     "tool_guard.py"
     "skill_injector.py"
     "sdd_triage.py"
+    "memory_protocol.py"
+    "markitdown_protocol.py"
     "version_manager.py"
     "compat.py"
     "preset_tool.py"
     "plugin.yaml"
     "presets.yaml"
 )
+
+# Safety net: scrub stale .pyc files from previous installs that may have
+# cached a different module layout. Without this, the plugin's bytecode
+# cache can survive an upgrade and shadow the new sources.
+if [ -d "$PLUGIN_DIR/__pycache__" ]; then
+    rm -rf "$PLUGIN_DIR/__pycache__"
+fi
 
 COPIED=0
 for f in "${PLUGIN_FILES[@]}"; do
