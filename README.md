@@ -392,9 +392,13 @@ The cron entry is **idempotent**: re-running install.sh updates the entry only w
 
 ### Auto-routing
 
-Skills are **automatically injected** into sub-agent goals via the `pre_tool_call` hook — no user action needed. The orchestrator does NOT load skill content; it matches the goal keywords + task_type against `src/skill_injector.py:_SKILL_ROUTES` and appends a `[SKILL REQUIRED]` instruction telling the sub-agent to call `skill_view(name)` itself. Max 2 skills per delegation to avoid context bloat.
+Skill discovery is delegated to **Hermes's native mechanism** (`agent/prompt_builder.py:build_skills_system_prompt`, called from `run_agent.py`). On every system-prompt build Hermes scans `~/.hermes/skills/**/SKILL.md`, reads `name + description` from each frontmatter, and injects an `<available_skills>` block into the system prompt with a mandatory instruction to load relevant skills via `skill_view(name)`.
 
-Hermes alone does NOT do this — the `skill_view` tool exists but the model decides whether to invoke it. Cobalt's injector forces the load deterministically based on the goal text, every time.
+This is the Anthropic Skills progressive-disclosure pattern: lightweight metadata in the system prompt, full skill body loaded on-demand. The catalog is LRU-cached in memory and disk-snapshotted with mtime invalidation, so the token cost is paid once per session, not per turn.
+
+**Cobalt does NOT layer a second skill router on top.** Earlier versions (v0.7.x and prior) used a keyword table in `src/skill_injector.py` to inject `[SKILL REQUIRED]` riders into sub-agent goals — that was redundant with Hermes's native discovery and was removed in v0.8.0. Rich description-based selection by the model strictly beats brittle keyword matching, and skipping the cobalt rider saves tokens on every delegation.
+
+If you want to force a specific skill on a sub-agent, write the instruction directly in the orchestrator's goal text: `"Before starting, call skill_view('frontend-design') and apply its rules."` The orchestrator already sees the `<available_skills>` catalog every turn and has enough context to make this call.
 
 ---
 
