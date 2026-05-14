@@ -24,7 +24,7 @@ Phase selection guide:
 - Unsure -> ASK the user before starting
 - Bias: MORE phases over fewer. Skipping Propose for non-trivial work is an error.
 
-Phase override: if your Apply will create >1 file OR introduce a new module/package boundary, you MUST insert a Design phase before it. Design = a single delegate_task with task_type=design that returns: file layout, public interfaces, key dependencies. Skip ONLY for single-file scripts with no external interface.
+Phase override: if your Apply will create >1 file OR introduce a new module/package boundary, you MUST insert a Design phase before it. Design = a single delegate_task with task_type=design that returns: file layout, public interfaces, key dependencies. Skip ONLY for single-file scripts with no external interface. Using the todo tool to plan does NOT count as a Design phase — Design MUST be a delegate_task call with task_type=design.
 
 ### Step 0.5: Project Context (handled by cobalt, no action required)
 If a `CONTEXT.md` file exists in the project's working directory, cobalt
