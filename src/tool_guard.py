@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 # Tools the orchestrator is ALLOWED to call directly
 ORCHESTRATOR_ALLOWED = frozenset({
     "delegate_task",
-    "memory",
+    # NOTE: Hermes's built-in `memory` tool is intentionally NOT allowed here.
+    # It writes to a capped local notes file (~/.hermes/MEMORY.md /
+    # ~/.hermes/USER.md) that does NOT cross sessions or machines. All
+    # persistent memory must flow through Engram via the `mcp_engram_mem_*`
+    # tools listed below, which sync to Engram Cloud automatically.
     "cobalt_preset",
     "clarify",
     "todo",
@@ -24,16 +28,18 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "send_message",
     "session_search",
     "cronjob",
-    # Engram memory tools — orchestrator accesses memory directly
-    "mem_save",
-    "mem_search",
-    "mem_get_observation",
-    "mem_context",
-    "mem_session_summary",
-    "mem_save_prompt",
-    "mem_suggest_topic_key",
-    "mem_current_project",
-    "mem_update",
+    # Engram memory tools — orchestrator accesses memory directly.
+    # Hermes prefixes MCP tools as mcp_<server>_<tool>, so the engram
+    # server's `mem_save` becomes `mcp_engram_mem_save` when invoked.
+    "mcp_engram_mem_save",
+    "mcp_engram_mem_search",
+    "mcp_engram_mem_get_observation",
+    "mcp_engram_mem_context",
+    "mcp_engram_mem_session_summary",
+    "mcp_engram_mem_save_prompt",
+    "mcp_engram_mem_suggest_topic_key",
+    "mcp_engram_mem_current_project",
+    "mcp_engram_mem_update",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.

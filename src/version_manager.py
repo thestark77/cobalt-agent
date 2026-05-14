@@ -11,7 +11,7 @@ Structure:
 
 Integration:
 - Version init: triggered on first delegate_task of an SDD cycle
-- Version close: triggered when orchestrator calls mem_session_summary after completing work
+- Version close: triggered when orchestrator calls mcp_engram_mem_session_summary after completing work
 - Mid-session additions: appended to plan.md with timestamp
 """
 

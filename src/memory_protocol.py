@@ -29,15 +29,15 @@ not on-demand. Follow these rules without being asked.
 
 # WHEN TO SEARCH (mandatory, BEFORE acting)
 - User says: "remember", "recall", "what did we do", "recordar", "qué hicimos",
-  "acordate", or references prior work → call `mem_context` first, then
-  `mem_search` if not found in recent history, then `mem_get_observation`
+  "acordate", or references prior work → call `mcp_engram_mem_context` first, then
+  `mcp_engram_mem_search` if not found in recent history, then `mcp_engram_mem_get_observation`
   for full content.
 - User's FIRST message of the session references a project, feature, or
-  problem → call `mem_search` with keywords from the message BEFORE responding.
+  problem → call `mcp_engram_mem_search` with keywords from the message BEFORE responding.
 - Starting any non-trivial task that may have been worked on before → search.
 
 # WHEN TO SAVE (mandatory, IMMEDIATELY after the event — do NOT batch)
-Call `mem_save` after ANY of:
+Call `mcp_engram_mem_save` after ANY of:
 - Architecture, design, or workflow decision taken
 - Bug fix completed (include root cause in content)
 - Convention or pattern established (naming, structure, approach)
@@ -47,7 +47,7 @@ Call `mem_save` after ANY of:
 - User preference or constraint stated
 - Feature implemented with non-obvious approach
 
-`mem_save` format:
+`mcp_engram_mem_save` format:
   title: "<verb> <what>"           (e.g. "Fixed N+1 query in UserList")
   type:  bugfix | decision | architecture | discovery | pattern | config | preference
   scope: project (default) | personal
@@ -63,10 +63,10 @@ Call `mem_save` after ANY of:
 Topic-key rules:
 - Same topic evolving → reuse `topic_key` (upsert overwrites)
 - Different topic → different `topic_key`
-- Unsure → call `mem_suggest_topic_key` first
+- Unsure → call `mcp_engram_mem_suggest_topic_key` first
 
 # SESSION CLOSE (mandatory, before saying "done"/"listo"/"that's it")
-Call `mem_session_summary` with:
+Call `mcp_engram_mem_session_summary` with:
   ## Goal
   ## Discoveries
   ## Accomplished
@@ -77,20 +77,20 @@ Skipping this leaves the next session blind. NOT optional.
 
 # AFTER DELEGATION (cobalt automatically prepends this to every sub-agent goal)
 Sub-agents that make discoveries, decisions, or fix bugs MUST call
-`mem_save` before returning. The orchestrator does NOT see sub-agent
+`mcp_engram_mem_save` before returning. The orchestrator does NOT see sub-agent
 context, so the sub-agent is responsible for persisting.
 
 # AFTER COMPACTION (recovery)
 On compaction message:
-1. `mem_session_summary` with the compaction content — persists pre-compact work
-2. `mem_context` — recover prior session history
+1. `mcp_engram_mem_session_summary` with the compaction content — persists pre-compact work
+2. `mcp_engram_mem_context` — recover prior session history
 3. Only then resume work
 """
 
 _SUBAGENT_MEMORY_RIDER = (
     "\n\n[MEMORY — sub-agent rule]\n"
     "If you make a decision, fix a bug, or learn something non-obvious during "
-    "this task, call `mem_save` BEFORE returning. The orchestrator does not "
+    "this task, call `mcp_engram_mem_save` BEFORE returning. The orchestrator does not "
     "see your context — save it yourself or it is lost."
 )
 
@@ -117,13 +117,13 @@ def subagent_memory_rider() -> str:
 # ── Memory tools the orchestrator may call directly ────────────────────────
 
 ENGRAM_ORCHESTRATOR_TOOLS = frozenset({
-    "mem_save",
-    "mem_search",
-    "mem_get_observation",
-    "mem_context",
-    "mem_session_summary",
-    "mem_save_prompt",
-    "mem_suggest_topic_key",
-    "mem_current_project",
-    "mem_update",
+    "mcp_engram_mem_save",
+    "mcp_engram_mem_search",
+    "mcp_engram_mem_get_observation",
+    "mcp_engram_mem_context",
+    "mcp_engram_mem_session_summary",
+    "mcp_engram_mem_save_prompt",
+    "mcp_engram_mem_suggest_topic_key",
+    "mcp_engram_mem_current_project",
+    "mcp_engram_mem_update",
 })

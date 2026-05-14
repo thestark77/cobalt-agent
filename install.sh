@@ -806,6 +806,31 @@ if [ -f "$LEGACY_HONCHO" ]; then
     warn "Honcho is no longer used. Backed up $LEGACY_HONCHO -> $LEGACY_HONCHO.bak"
 fi
 
+# Engram Cloud bootstrap: point the local CLI at the cloud server, then
+# enroll the current project so AUTOSYNC has somewhere to push to. The
+# server/token come from env; both `engram cloud config` and `engram cloud
+# enroll` are idempotent and safe to re-run.
+if [ "$ENGRAM_ENABLED" -eq 1 ] && command -v engram &>/dev/null; then
+    if engram cloud config --server "$ENGRAM_SERVER" >/dev/null 2>&1; then
+        log "Engram cloud server configured: $ENGRAM_SERVER"
+    fi
+    # Best-effort enroll for the current shell's project. Engram resolves the
+    # project name from the git remote in $PWD or defaults to the directory
+    # name; we just kick off enrollment so AUTOSYNC has a registered project.
+    ENGRAM_DETECTED_PROJECT=$(engram current-project 2>/dev/null | head -n1 || true)
+    if [ -n "$ENGRAM_DETECTED_PROJECT" ] && [ "$ENGRAM_DETECTED_PROJECT" != "unknown" ]; then
+        if engram cloud enroll "$ENGRAM_DETECTED_PROJECT" >/dev/null 2>&1; then
+            log "Engram project enrolled in cloud: $ENGRAM_DETECTED_PROJECT"
+        else
+            warn "Engram cloud enroll for '$ENGRAM_DETECTED_PROJECT' failed (already enrolled? wrong token?)"
+            warn "Manual: engram cloud enroll <project-name>"
+        fi
+    else
+        warn "Engram could not detect a project name from \$PWD."
+        warn "After your first save, run: engram cloud enroll <project-name>"
+    fi
+fi
+
 log "Configuration complete"
 
 # ============================================================================

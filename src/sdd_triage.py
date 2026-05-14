@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _TRIAGE_INJECTION = """
 [MANDATORY TRIAGE — respond to this BEFORE any delegation or action]
 
-STEP 0: Call `mem_search` (or `mem_context` if you only need recent history)
+STEP 0: Call `mcp_engram_mem_search` (or `mcp_engram_mem_context` if you only need recent history)
 with the user's topic to check for prior context. See the Engram protocol
 block below for full memory rules.
 
@@ -33,7 +33,7 @@ Classify this request:
    - Tasks (atomic breakdown via todo)
    - Apply (write/modify code)
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
-   - Archive (persist final state via `mem_session_summary` or `mem_save`)
+   - Archive (persist final state via `mcp_engram_mem_session_summary` or `mcp_engram_mem_save`)
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
@@ -42,7 +42,7 @@ Bias: apply MORE phases rather than fewer for any non-trivial task.
 
 CRITICAL RULES:
 - Verify must be its OWN separate delegate_task call. Never ask the Apply sub-agent to also verify.
-- Archive phase MUST end with `mem_session_summary` (or `mem_save` for a single decision).
+- Archive phase MUST end with `mcp_engram_mem_session_summary` (or `mcp_engram_mem_save` for a single decision).
 """
 
 _STEERING_INJECTION = """
@@ -108,7 +108,7 @@ def _has_active_plan(conversation_history: list = None) -> bool:
                         name = part.get("name", "")
                         if name in ("delegate_task", "todo"):
                             return True
-                        if name == "mem_session_summary":
+                        if name == "mcp_engram_mem_session_summary":
                             return False
         elif isinstance(content, str):
             if "TASK:" in content and "→" in content:
