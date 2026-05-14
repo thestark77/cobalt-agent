@@ -850,6 +850,74 @@ skill_is_installed() {
     [ -f "$SKILLS_DIR/$name/SKILL.md" ]
 }
 
+# Fallback installer: when skills.sh has not indexed a repo (or stores the
+# SKILL.md in a non-conventional layout), clone the source repo directly
+# from GitHub and copy the skill tree into ~/.hermes/skills/<name>/.
+#
+# Supports:
+#   - skills-sh/<owner>/<repo>            (SKILL.md in repo root)
+#   - skills-sh/<owner>/<repo>/<subpath>  (SKILL.md at repo/<subpath>/SKILL.md)
+#
+# For deeply nested layouts (e.g. wshobson/agents at
+# plugins/<area>/skills/<name>/SKILL.md) we also scan a couple of common
+# patterns before giving up.
+install_skill_from_github() {
+    local identifier="$1"
+    local skill_name="$2"
+
+    [[ "$identifier" == skills-sh/* ]] || return 1
+
+    local path_after="${identifier#skills-sh/}"
+    local owner="${path_after%%/*}"
+    local rest="${path_after#*/}"
+    local repo="${rest%%/*}"
+    local subpath=""
+    if [[ "$rest" == *"/"* ]]; then
+        subpath="${rest#*/}"
+    fi
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d) || return 1
+
+    if ! git clone --quiet --depth 1 "https://github.com/${owner}/${repo}" "$tmp_dir/repo" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Probe order matters: most-specific first, broadest last.
+    local skill_src=""
+    local probe
+    for probe in \
+        "$tmp_dir/repo/${subpath}" \
+        "$tmp_dir/repo/skills/${subpath}" \
+        "$tmp_dir/repo" \
+        "$tmp_dir/repo/skills/${skill_name}"; do
+        [ -n "$probe" ] || continue
+        if [ -f "$probe/SKILL.md" ]; then
+            skill_src="$probe"
+            break
+        fi
+    done
+
+    if [ -z "$skill_src" ]; then
+        # Last resort: search anywhere in the cloned tree
+        skill_src=$(dirname "$(find "$tmp_dir/repo" -maxdepth 4 -name SKILL.md 2>/dev/null | head -n1)" 2>/dev/null)
+        if [ -z "$skill_src" ] || [ "$skill_src" = "." ]; then
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+    fi
+
+    local dest="$SKILLS_DIR/$skill_name"
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    # Use a trailing /. so hidden files / nested dirs come along
+    cp -r "$skill_src"/. "$dest"/ 2>/dev/null
+    rm -rf "$tmp_dir"
+
+    [ -f "$dest/SKILL.md" ]
+}
+
 for i in "${!SKILLS[@]}"; do
     name="${SKILL_NAMES[$i]}"
     identifier="${SKILLS[$i]}"
@@ -878,6 +946,14 @@ for i in "${!SKILLS[@]}"; do
     "$HERMES_BIN" skills install "$identifier" --force >/dev/null 2>&1 || true
     if skill_is_installed "$name"; then
         log "  $name (installed)"
+        SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
+        continue
+    fi
+
+    # Fallback: skills.sh did not have the skill indexed (or it lives in a
+    # non-conventional layout). Clone the source repo and copy by hand.
+    if install_skill_from_github "$identifier" "$name"; then
+        log "  $name (installed from GitHub fallback)"
         SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
     else
         warn "  $name (failed — try: hermes skills install $identifier --force)"
