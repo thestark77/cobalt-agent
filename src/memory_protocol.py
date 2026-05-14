@@ -52,16 +52,29 @@ the turn instead of relying on the implicit default.
 NEVER assume "no project arg" means "all projects". It means "current
 default project" — which is one specific bucket, not a wildcard.
 
-# DO NOT CONFUSE WITH `session_search`
+# `session_search` vs Engram — DO NOT confuse the two stores
 
-`session_search` searches your past CONVERSATION history (Hermes's
-internal session store). It is SLOW (often 30-120 s) and DOES NOT see
-Engram persistent memory. If the user asks about memories, decisions,
-patterns, or prior work, the answer lives in Engram — call
-`mcp_engram_mem_search` / `mcp_engram_mem_context`, NEVER `session_search`.
-A `mem_search` that returns zero results does NOT mean "try the
-session log next"; it usually means the `project` filter is wrong.
-Resolve the project (see PROJECT SCOPING above) and search again.
+`session_search` reads your CONVERSATION HISTORY (transcripts of past
+chat turns). Engram stores CURATED KNOWLEDGE (decisions, patterns,
+bug fixes, preferences) explicitly saved via `mcp_engram_mem_save`.
+They are different data sets, not redundant copies.
+
+Pick the right one for the question:
+- "What did we decide about X?" / "How did we fix N+1?" / "What's the
+  convention here?" / "What do you know about my preferences?" →
+  Engram (`mcp_engram_mem_search` / `mcp_engram_mem_context`).
+- "What did you say two hours ago?" / "Show me the code you posted
+  yesterday" / "Recover that snippet from the last session" →
+  `session_search` is the right tool.
+
+CRITICAL: when `mcp_engram_mem_search` returns 0 results, do NOT
+auto-fall-back to `session_search`. Zero results almost always means
+the `project=` filter is wrong (see PROJECT SCOPING above). Resolve
+the project — call `mcp_engram_mem_current_project` if needed — and
+re-run `mcp_engram_mem_search` before considering other tools.
+`session_search` is slow (30-120 s) and answers a different question;
+using it as a fallback wastes a turn on data that was never going to
+be there.
 
 # WHEN TO SEARCH (mandatory, BEFORE acting)
 - User says: "remember", "recall", "what did we do", "recordar", "qué hicimos",
