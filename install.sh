@@ -90,6 +90,15 @@ setup_verify_cron() {
     cp "$COBALT_TMP/scripts/verify-patch.sh" "$verify_script"
     chmod +x "$verify_script"
 
+    # Persist the patch applicator inside HERMES_HOME so the verifier can
+    # find it even after the user deletes the cloned cobalt-agent repo.
+    # verify-patch.sh probes this path before falling back to COBALT_HOME.
+    mkdir -p "$HOME/.hermes/cobalt-patches"
+    if [ -f "$COBALT_TMP/patches/apply_routing_patch.py" ]; then
+        cp "$COBALT_TMP/patches/apply_routing_patch.py" \
+           "$HOME/.hermes/cobalt-patches/apply_routing_patch.py"
+    fi
+
     write_cron_env_file
     local new_entry
     new_entry=$(build_cron_entry "$verify_script")

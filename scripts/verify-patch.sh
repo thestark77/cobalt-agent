@@ -23,9 +23,25 @@ set -uo pipefail
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COBALT_HOME="${COBALT_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-PATCH_SCRIPT="$COBALT_HOME/patches/apply_routing_patch.py"
 VENV_PYTHON="$HERMES_HOME/hermes-agent/venv/bin/python"
 HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
+
+# Resolve apply_routing_patch.py from the most likely locations.
+# Order matters: HERMES_HOME-installed copy first (survives repo deletion),
+# then the local repo (works when run from the cloned source dir).
+_resolve_patch_script() {
+    local candidate
+    for candidate in \
+        "$HERMES_HOME/cobalt-patches/apply_routing_patch.py" \
+        "$COBALT_HOME/patches/apply_routing_patch.py"; do
+        if [ -f "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+PATCH_SCRIPT="$(_resolve_patch_script || true)"
 
 log() {
     if [ -z "${COBALT_QUIET:-}" ]; then
@@ -66,8 +82,9 @@ notify_telegram() {
 
 # ── Preflight ──────────────────────────────────────────────────────────────
 
-if [ ! -f "$PATCH_SCRIPT" ]; then
-    err "Patch script not found: $PATCH_SCRIPT"
+if [ -z "$PATCH_SCRIPT" ] || [ ! -f "$PATCH_SCRIPT" ]; then
+    err "apply_routing_patch.py not found in $HERMES_HOME/cobalt-patches/ or $COBALT_HOME/patches/"
+    err "Re-run install.sh to refresh the patch script copy."
     exit 2
 fi
 
