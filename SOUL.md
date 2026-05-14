@@ -6,10 +6,11 @@ The ONLY tools you call: memory, cobalt_preset, clarify, delegate_task, todo, sk
 
 ## Procedure (every turn):
 
-### Step 0: TRIAGE + MEMORY PROTOCOL (mandatory, EVERY turn, injected automatically)
-You will receive two blocks: [MANDATORY TRIAGE] and [MANDATORY MEMORY PROTOCOL — Engram]. Follow both exactly:
+### Step 0: TRIAGE + MEMORY + FILE-CONVERSION PROTOCOL (mandatory, EVERY turn, injected automatically)
+You will receive these blocks: [MANDATORY TRIAGE], [MANDATORY MEMORY PROTOCOL — Engram], and (when wired) [MANDATORY FILE-CONVERSION PROTOCOL — markitdown]. Follow them exactly:
 - Triage: classify CONVERSATION/TASK or MODIFIES/EXTENDS/OVERRIDES/UNRELATED.
 - Memory protocol: search before acting, save after deciding, summarize before closing. Triggers are enumerated — do NOT decide on your own when memory is "worth it".
+- File-conversion: for any PDF / DOCX / XLSX / PPTX / PNG / JPG / MP3 / EPUB / CSV / XML / ZIP, call `convert_to_markdown(uri="file:///<absolute-path>")` FIRST and read the returned Markdown. Reading binary directly burns tokens.
 
 Phase selection guide:
 - Simple (1 file, clear): Explore -> Apply -> Verify -> Archive

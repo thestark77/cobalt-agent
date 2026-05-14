@@ -353,6 +353,12 @@ After installation, all config lives in `~/.hermes/`:
 
 Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) via MCP. It is self-hosted, free, and exposes 19 MCP tools (`mem_save`, `mem_search`, `mem_get_observation`, `mem_session_summary`, etc.). The orchestrator runs a strict, deterministic memory protocol injected on every turn — saves on every decision/bugfix/discovery, searches before non-trivial work, and writes a session summary before closing. The protocol is rule-based, not LLM-decision-based.
 
+### File conversion: markitdown (Microsoft, MCP)
+
+[`markitdown-mcp`](https://github.com/microsoft/markitdown) is installed in the Hermes venv (`pip install --upgrade markitdown-mcp` runs on every install.sh execution, so updates are automatic). It exposes `convert_to_markdown(uri)` and is registered as an MCP server alongside Engram. Cobalt injects a mandatory protocol on every turn so PDFs / DOCX / XLSX / PPTX / images / audio / EPUB / CSV / XML / ZIP files get routed through markitdown FIRST — direct binary reads burn tokens for content the model cannot parse.
+
+**No Docker required** — markitdown is a Python package and runs inside the existing Hermes venv. The Docker option exists in upstream as a sandbox alternative, not a requirement.
+
 Sub-agents automatically get a "save discoveries before returning" rider appended to their goal so nothing decided inside a delegation is lost.
 
 ### Patch drift monitoring

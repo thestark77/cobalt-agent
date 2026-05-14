@@ -149,10 +149,11 @@ def _ensure_skills_toolset(task_dict: dict) -> None:
 
 
 def _inject_routing(task_dict: dict, task_type: str) -> None:
-    """Inject routing fields, curation, skills, memory rider, and set timeout."""
+    """Inject routing fields, curation, skills, memory + markitdown riders, timeout."""
     from router import resolve_routing, apply_dynamic_timeout
     from skill_injector import inject_skill_instruction
     from memory_protocol import subagent_memory_rider
+    from markitdown_protocol import subagent_markitdown_rider
 
     apply_dynamic_timeout(task_type)
 
@@ -183,6 +184,7 @@ def _inject_routing(task_dict: dict, task_type: str) -> None:
         logger.info("cobalt-routing: curation suffix injected for task_type=%s", task_type)
 
     task_dict["goal"] = task_dict.get("goal", "") + subagent_memory_rider()
+    task_dict["goal"] = task_dict.get("goal", "") + subagent_markitdown_rider()
 
 
 def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
@@ -265,13 +267,14 @@ def _pre_llm_call_hook(
     conversation_history: list = None,
     **kwargs,
 ):
-    """Composite pre_llm_call hook: SDD triage + Engram memory protocol.
+    """Composite pre_llm_call hook: SDD triage + Engram memory + markitdown.
 
     Sub-agents receive nothing (their context comes from the goal suffix).
-    Orchestrator receives both blocks concatenated, every turn.
+    Orchestrator receives all blocks concatenated, every turn.
     """
     from sdd_triage import pre_llm_call_hook as triage_hook
     from memory_protocol import build_memory_protocol_block
+    from markitdown_protocol import build_markitdown_protocol_block
 
     triage = triage_hook(
         user_message=user_message,
@@ -280,9 +283,10 @@ def _pre_llm_call_hook(
         **kwargs,
     )
     memory = build_memory_protocol_block(task_id=task_id)
+    markdown = build_markitdown_protocol_block(task_id=task_id)
 
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
-    parts = [p for p in (triage_ctx, memory) if p]
+    parts = [p for p in (triage_ctx, memory, markdown) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}
