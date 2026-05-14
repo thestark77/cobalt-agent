@@ -169,7 +169,7 @@ def _infer_task_type(goal: str) -> str:
     first_segment = goal_lower[:60]
     full_segment = goal_lower[:120]
 
-    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "modifica", "modificar", "modify", "refactoriza", "write", "implement", "create", "build", "develop", "make", "code", "programa"]
+    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "modifica", "modificar", "modify", "refactoriza", "agrega", "agregar", "añade", "añadir", "actualiza", "actualizar", "extiende", "extender", "write", "implement", "create", "build", "develop", "make", "code", "programa", "add", "append", "update", "extend"]
     verify_verbs = ["verifica", "testea", "prueba", "ejecuta", "run", "test", "check if", "confirma", "verify", "ensure", "confirm"]
     verify_intent_signals = ["verify that", "check that", "ensure that", "confirm that", "verifica que", "comprobar que", "report the"]
     scout_verbs = ["busca", "encuentra", "search", "find", "locate", "descubre"]
