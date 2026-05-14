@@ -15,6 +15,49 @@ MAX_SKILLS_PER_DELEGATION = 2
 SKILLS_DIR = Path.home() / ".hermes" / "skills"
 
 _SKILL_ROUTES: List[Tuple[List[str], str]] = [
+    # Browser automation — playwright-cli runs alongside e2e-testing-patterns
+    # when both are matched (MAX_SKILLS_PER_DELEGATION=2). Listed FIRST so a
+    # goal mentioning "playwright" gets the CLI skill in addition to e2e patterns.
+    (
+        ["playwright cli", "playwright codegen", "playwright record",
+         "browser automation", "automate browser", "headless browser",
+         "browser test", "selector inspection", "screenshot script"],
+        "playwright-cli",
+    ),
+    (
+        ["e2e test", "playwright", "cypress", "testing framework",
+         "spec file", "pruebas e2e", "integration test", "test suite",
+         "pruebas de integracion", "end to end"],
+        "e2e-testing-patterns",
+    ),
+    # Frontend / design — order matters. Specific design-quality skills BEFORE
+    # the broad frontend-design fallback so they get picked when keywords match.
+    (
+        ["anti-slop", "premium frontend", "premium taste", "generic design",
+         "boring design", "polish design", "design taste", "feel cheap",
+         "feel premium", "high-end design", "tasteful", "buen gusto"],
+        "gpt-tasteskill",
+    ),
+    (
+        ["design language", "design system", "design tokens", "brand voice",
+         "design coherence", "design consistency", "design refinement",
+         "sistema de diseño", "lenguaje de diseño"],
+        "impeccable",
+    ),
+    (
+        ["html prototype", "hi-fi prototype", "high fidelity", "slide deck",
+         "slideshow", "presentation", "html animation", "design demo",
+         "prototype animation", "mockup html", "diseño html", "prototipo hi-fi",
+         "presentacion html", "demo interactivo", "iphone mockup",
+         "device mockup", "html slide"],
+        "huashu-design",
+    ),
+    (
+        ["ui design", "ux design", "ui-ux", "professional ui", "design intelligence",
+         "design across platforms", "multi-platform design", "diseño ui",
+         "diseño ux", "diseño profesional"],
+        "ui-ux-pro-max",
+    ),
     (
         ["frontend", "react", "vue", "svelte", "next.js", "nextjs", "component design",
          "landing page", "user interface", "interfaz de usuario",
@@ -27,12 +70,6 @@ _SKILL_ROUTES: List[Tuple[List[str], str]] = [
         ["admin panel", "panel de admin", "backoffice", "saas interface",
          "tool interface", "app design", "dashboard design", "panel administrativo"],
         "interface-design",
-    ),
-    (
-        ["e2e test", "playwright", "cypress", "testing framework",
-         "spec file", "pruebas e2e", "integration test", "test suite",
-         "pruebas de integracion", "end to end"],
-        "e2e-testing-patterns",
     ),
     (
         ["error handling", "manejo de errores", "exception handling",
@@ -64,9 +101,9 @@ _SKILL_ROUTES: List[Tuple[List[str], str]] = [
 ]
 
 _TASK_TYPE_AFFINITY: Dict[str, List[str]] = {
-    "design": ["prompt-engineering-patterns"],
+    "design": ["prompt-engineering-patterns", "ui-ux-pro-max"],
     "spec": ["prompt-engineering-patterns"],
-    "verify": ["e2e-testing-patterns"],
+    "verify": ["e2e-testing-patterns", "playwright-cli"],
 }
 
 _SKILL_INSTRUCTION_TEMPLATE = (

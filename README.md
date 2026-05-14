@@ -366,18 +366,29 @@ The cron entry is **idempotent**: re-running install.sh updates the entry only w
 
 ### Installed Skills
 
-| Skill | Source |
-|---|---|
-| prompt-engineering-patterns | wshobson/agents |
-| frontend-design | anthropics/skills |
-| interface-design | dammyjay93 |
-| e2e-testing-patterns | wshobson/agents |
-| error-handling-patterns | wshobson/agents |
-| postgresql-table-design | wshobson/agents |
-| judgment-day | gentleman-programming/sdd-agent-team |
-| branch-pr | gentleman-programming/sdd-agent-team |
-| skill-creator | gentleman-programming/sdd-agent-team |
-| knowledge-graph | thestark77/autosdd |
+| Skill | Source | Use case |
+|---|---|---|
+| prompt-engineering-patterns | wshobson/agents | LLM prompt design, few-shot, CoT |
+| frontend-design | anthropics/skills | Generic frontend / React / Vue / Tailwind |
+| interface-design | dammyjay93 | Admin panels, backoffice, SaaS interfaces |
+| e2e-testing-patterns | wshobson/agents | E2E test patterns, fixtures, page objects |
+| error-handling-patterns | wshobson/agents | Error/result types, retry, circuit breakers |
+| postgresql-table-design | wshobson/agents | Schema, migrations, indexing |
+| judgment-day | gentleman-programming/sdd-agent-team | Dual-review / adversarial review |
+| branch-pr | gentleman-programming/sdd-agent-team | PR strategy, branch naming, review flow |
+| skill-creator | gentleman-programming/sdd-agent-team | Build new skills |
+| knowledge-graph | thestark77/autosdd | Visualize AI memory (works with Engram) |
+| **playwright-cli** | microsoft/playwright-cli | Browser automation, codegen, selectors |
+| **impeccable** | pbakaus/impeccable | Design system / design language refinement |
+| **huashu-design** | alchaincyf/huashu-design | HTML hi-fi prototypes, slides, animations |
+| **ui-ux-pro-max** | nextlevelbuilder/ui-ux-pro-max-skill | Professional UI/UX across platforms |
+| **gpt-tasteskill** | Leonxlnx/taste-skill | Anti-slop, premium frontend taste |
+
+### Auto-routing
+
+Skills are **automatically injected** into sub-agent goals via the `pre_tool_call` hook — no user action needed. The orchestrator does NOT load skill content; it matches the goal keywords + task_type against `src/skill_injector.py:_SKILL_ROUTES` and appends a `[SKILL REQUIRED]` instruction telling the sub-agent to call `skill_view(name)` itself. Max 2 skills per delegation to avoid context bloat.
+
+Hermes alone does NOT do this — the `skill_view` tool exists but the model decides whether to invoke it. Cobalt's injector forces the load deterministically based on the goal text, every time.
 
 ---
 

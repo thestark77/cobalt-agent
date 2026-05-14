@@ -602,6 +602,12 @@ SKILLS=(
     "skills-sh/gentleman-programming/sdd-agent-team/branch-pr"
     "skills-sh/gentleman-programming/sdd-agent-team/skill-creator"
     "skills-sh/thestark77/autosdd/knowledge-graph"
+    # v0.8.0 additions — design / browser automation
+    "skills-sh/microsoft/playwright-cli/playwright-cli"
+    "skills-sh/pbakaus/impeccable/impeccable"
+    "skills-sh/alchaincyf/huashu-design/huashu-design"
+    "skills-sh/nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max"
+    "skills-sh/Leonxlnx/taste-skill/gpt-tasteskill"
 )
 
 SKILL_NAMES=(
@@ -615,6 +621,12 @@ SKILL_NAMES=(
     "branch-pr"
     "skill-creator"
     "knowledge-graph"
+    # v0.8.0 additions
+    "playwright-cli"
+    "impeccable"
+    "huashu-design"
+    "ui-ux-pro-max"
+    "gpt-tasteskill"
 )
 
 log "Installing ${#SKILLS[@]} skills..."
