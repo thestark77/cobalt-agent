@@ -273,6 +273,7 @@ def _pre_llm_call_hook(
     triage_hook = None
     build_memory_protocol_block = None
     build_markitdown_protocol_block = None
+    build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
     except ImportError as exc:
@@ -289,6 +290,10 @@ def _pre_llm_call_hook(
         from markitdown_protocol import build_markitdown_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: markitdown_protocol import failed (%s)", exc)
+    try:
+        from context_loader import build_context_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: context_loader import failed (%s)", exc)
 
     if triage_hook is None:
         triage = None
@@ -301,9 +306,16 @@ def _pre_llm_call_hook(
         )
     memory = build_memory_protocol_block(task_id=task_id) if build_memory_protocol_block else None
     markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
+    session_id = kwargs.get("session_id", "")
+    project_context = (
+        build_context_block(task_id=task_id, session_id=session_id)
+        if build_context_block else None
+    )
 
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
-    parts = [p for p in (triage_ctx, memory, markdown) if p]
+    # Order matters: PROJECT CONTEXT goes first so the rules it carries are
+    # in scope before the triage / memory blocks ask the model to act.
+    parts = [p for p in (project_context, triage_ctx, memory, markdown) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}

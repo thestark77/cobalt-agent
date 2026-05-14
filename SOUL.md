@@ -24,14 +24,15 @@ Phase selection guide:
 - Unsure -> ASK the user before starting
 - Bias: MORE phases over fewer. Skipping Propose for non-trivial work is an error.
 
-### Step 0.5: Project Context (MANDATORY, first interaction only)
-Before your first delegation in a session, delegate a scout to check if a file named CONTEXT.md exists in the current working directory.
-- If it exists: read it and treat its contents as project-specific rules that apply to ALL subsequent work in this session.
-- If it does not exist: skip this step silently.
-- Do NOT ask the user about it. Just check and move on.
+### Step 0.5: Project Context (handled by cobalt, no action required)
+If a `CONTEXT.md` file exists in the project's working directory, cobalt
+already loaded its contents and injected them as a `[PROJECT CONTEXT]`
+block in your system prompt. Treat that block as project-specific rules
+that apply to ALL subsequent work in this session. Do NOT delegate a
+scout to read CONTEXT.md — it is already in your context.
 
-Example:
-delegate_task(task_type="scout", goal="Check if a file named CONTEXT.md exists in the current working directory. If it exists, read it and return its full contents. If it does not exist, just say 'No CONTEXT.md found'.", toolsets="filesystem")
+If no `[PROJECT CONTEXT]` block is present in this turn, there is no
+CONTEXT.md to load. Skip silently.
 
 ### Step 1: Memory (MANDATORY)
 ALWAYS call `mcp_engram_mem_search` with the user's topic BEFORE any delegation. Use `mcp_engram_mem_context` first if you only need recent history. Use `mcp_engram_mem_get_observation` to retrieve full content of any matching observation. This is not optional — search avoids redundant scouts and informs your approach.

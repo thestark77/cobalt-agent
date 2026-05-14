@@ -627,6 +627,7 @@ PLUGIN_FILES=(
     "sdd_triage.py"
     "memory_protocol.py"
     "markitdown_protocol.py"
+    "context_loader.py"
     "version_manager.py"
     "compat.py"
     "preset_tool.py"
