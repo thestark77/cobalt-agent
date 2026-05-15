@@ -35,14 +35,18 @@ Classify this request:
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
    - Archive (persist final state via `mcp_engram_mem_session_summary` or `mcp_engram_mem_save`)
 
-   SKILL ROUTING (automatic): When delegating a sub-agent for any phase above,
-   check <available_skills>. If the matching openspec-* skill is listed, you MUST
-   include this directive in the delegation goal:
-   "Invoke skill_view('<skill>') for structured phase guidance before starting."
+   TASK_TYPE — set this explicitly on EVERY delegate_task call, using these exact values:
+   Explore→"explore", Propose→"propose", Spec→"spec", Design→"design",
+   Tasks→"tasks", Apply→"apply", Verify→"verify", Archive→"archive".
+   Never infer or omit task_type. Never combine phases into one delegation.
+
+   SKILL ROUTING (automatic): For each delegation, check <available_skills>.
+   If the matching openspec-* skill is listed, the delegation goal MUST start with:
+   "MANDATORY — call skill_view('<skill>') as your FIRST tool call before anything else."
    Mapping: Explore→openspec-explore, Propose→openspec-propose,
    Apply→openspec-apply-change, Verify→openspec-verify-change,
    Archive→openspec-archive-change.
-   This is automatic — do not wait for the user to request it.
+   This is non-negotiable — do not wait for the user to request it.
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
@@ -50,8 +54,17 @@ If the scope is unclear or complex, ask the user which phases to apply.
 Bias: apply MORE phases rather than fewer for any non-trivial task.
 
 CRITICAL RULES:
-- Verify must be its OWN separate delegate_task call. Never ask the Apply sub-agent to also verify.
+- Verify and Archive are ALWAYS two separate delegate_task calls with task_type="verify" and task_type="archive".
+  NEVER combine them. Verify first, Archive after Verify completes.
 - Archive phase MUST end with `mcp_engram_mem_session_summary` (or `mcp_engram_mem_save` for a single decision).
+"""
+
+_SUBAGENT_SKILL_INJECTION = """
+[MANDATORY FIRST ACTION]
+If your task goal starts with "MANDATORY — call skill_view" or contains "skill_view('<skill>')",
+you MUST call that skill_view tool as your VERY FIRST tool call — before reading any file,
+running any command, or doing any other work. The skill provides phase-specific guidance
+that shapes all subsequent decisions. Skipping it is a protocol violation.
 """
 
 _STEERING_INJECTION = """
@@ -73,13 +86,16 @@ def pre_llm_call_hook(
     conversation_history: list = None,
     **kwargs: Any,
 ) -> Optional[Dict[str, str]]:
-    """Inject triage or steering block on every orchestrator turn.
+    """Inject triage/steering for orchestrator; skill reminder for sub-agents.
 
-    - Sub-agents: never injected
+    - Sub-agents: lightweight skill-invocation reminder if goal has a skill directive
     - Orchestrator with active plan: STEERING variant
     - Orchestrator without active plan: TRIAGE variant
     """
     if task_id and (task_id.startswith("sa-") or task_id.startswith("subagent-")):
+        if user_message and "skill_view(" in user_message:
+            logger.info("cobalt-routing: sub-agent skill reminder injected (skill_view directive in goal)")
+            return {"context": _SUBAGENT_SKILL_INJECTION}
         return None
 
     if not user_message:
