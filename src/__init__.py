@@ -16,7 +16,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.7.0"
+PLUGIN_VERSION = "0.9.0"
 
 _plugin_dir = Path(__file__).parent
 if str(_plugin_dir) not in sys.path:

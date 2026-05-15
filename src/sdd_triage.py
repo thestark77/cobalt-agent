@@ -35,6 +35,15 @@ Classify this request:
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
    - Archive (persist final state via `mcp_engram_mem_session_summary` or `mcp_engram_mem_save`)
 
+   SKILL ROUTING (automatic): When delegating a sub-agent for any phase above,
+   check <available_skills>. If the matching openspec-* skill is listed, you MUST
+   include this directive in the delegation goal:
+   "Invoke skill_view('<skill>') for structured phase guidance before starting."
+   Mapping: Explore→openspec-explore, Propose→openspec-propose,
+   Apply→openspec-apply-change, Verify→openspec-verify-change,
+   Archive→openspec-archive-change.
+   This is automatic — do not wait for the user to request it.
+
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
 If the scope is unclear or complex, ask the user which phases to apply.

@@ -77,17 +77,18 @@ cd cobalt-agent
 bash install.sh
 ```
 
-The installer runs 9 steps autonomously:
+The installer runs 10 steps autonomously:
 
 1. **Prerequisites** — Checks Python 3.11+, git, curl, pip
 2. **Hermes Agent** — Clones and installs in `~/.hermes/hermes-agent/`
 3. **OpenCode Go** — Installs free model provider (kimi-k2.6, deepseek-v4)
 4. **Source Patch** — Applies routing hook to `delegate_tool.py` (reversible)
-5. **Plugin** — Deploys cobalt-routing to `~/.hermes/plugins/` (routing + tool guard + skills + memory protocol)
+5. **Plugin** — Deploys cobalt-routing to `~/.hermes/plugins/` (routing + tool guard + triage + memory protocol)
 6. **Configuration** — SOUL.md, config.yaml, Engram MCP server wiring
-7. **Skills** — Installs 10 curated skills
-8. **Patch verify automation** — Daily cron job with Telegram alerts when Hermes drifts the patch
-9. **Verification** — 6-point check (binary, plugin, patch, SOUL, config, version)
+7. **Skills** — Installs curated domain skills
+8. **SDD Skills** — Installs 5 OpenSpec-compatible SDD phase skills to `~/.hermes/skills/`
+9. **Patch verify automation** — Daily cron job with Telegram alerts when Hermes drifts the patch
+10. **Verification** — 6-point check (binary, plugin, patch, SOUL, config, version)
 
 ### Required configuration (the only thing you need to set)
 
@@ -236,13 +237,15 @@ Blocks the orchestrator from calling execution tools directly. Only `delegate_ta
 
 Maps `task_type` to the optimal model. Cheap models for exploration, expensive models for reasoning. The orchestrator schema is patched to make `task_type` a REQUIRED field — a mechanical fix for the XGrammar constrained decoding issue (sglang #12932) where optional parameters get dropped at the token generation level.
 
-### 3. Skill Injection
+### 3. Auto-SDD Skill Routing
 
-Injects `skill_view` instructions into the sub-agent's goal so it loads relevant skills from the curated set. The orchestrator resolves which skills are relevant based on task_type and keywords.
+When the orchestrator classifies a request as an EXECUTION TASK and delegates a sub-agent for a specific SDD phase, it automatically includes a `skill_view('<openspec-*>')` directive in the delegation goal. Sub-agents then invoke the matching OpenSpec-compatible skill for structured phase guidance (explore, propose, apply-change, verify-change, archive-change). No user instruction required — the routing happens mechanically via the triage injection.
 
-### 4. SDD Triage
+OpenSpec skill signals in goal text also feed directly into task_type inference: if a goal contains `openspec-verify-change`, the router immediately returns `verify` without running heuristics.
 
-Forces the orchestrator to classify every input before acting. Injects a `[MANDATORY TRIAGE]` block via `pre_llm_call` that requires explicit phase selection (explore, propose, apply, verify, archive).
+### 4. SDD Triage (auto-SDD)
+
+Forces the orchestrator to classify every input before acting. Injects a `[MANDATORY TRIAGE]` block via `pre_llm_call` that requires explicit phase selection (explore, propose, apply, verify, archive). Classification is binary: **CONVERSATION** (respond directly, no SDD) or **EXECUTION TASK** (full SDD pipeline). The orchestrator is intelligent enough to distinguish a question from a task — SDD is default behavior for work, not forced on every message.
 
 ### 5. Dynamic Timeout
 
@@ -281,7 +284,9 @@ Configured in `src/presets.yaml`. The "balanced" preset is active by default.
 | 9 | v0.6.3 | 95% | 4m 05s | ~18k | 4 | flash + k2.6 + pro |
 | 10 | v0.6.3 | 95% | 3m 40s | ~15k | 3 | flash + k2.6 + pro |
 | 11 | v0.6.3 | 95% | 4m 20s | ~19k | 4 | flash + k2.6 + pro |
-| 12 | v0.7.0 | pending | — | — | — | — |
+| 12 | v0.7.0 | 95% | 4m 08s | ~17k | 4 | flash + k2.6 + pro |
+| 13 | v0.8.0 | 95% | 3m 52s | ~16k | 3 | flash + k2.6 + pro |
+| 14 | v0.9.0 | pending | — | — | — | — |
 
 **Example test prompt:**
 > "Necesito un script en Python que lea un archivo JSON con datos de ventas, calcule totales por categoría y genere un reporte en markdown."
@@ -390,15 +395,29 @@ The cron entry is **idempotent**: re-running install.sh updates the entry only w
 | **ui-ux-pro-max** | nextlevelbuilder/ui-ux-pro-max-skill | Professional UI/UX across platforms |
 | **gpt-tasteskill** | Leonxlnx/taste-skill | Anti-slop, premium frontend taste |
 
+**OpenSpec-compatible SDD skills** (installed to `~/.hermes/skills/` by `scripts/install_openspec_skills.sh`):
+
+| Skill | Phase | Purpose |
+|---|---|---|
+| openspec-explore | Explore | Thinking partner — investigate before committing |
+| openspec-propose | Propose | Create `proposal.md`, `design.md`, `tasks.md` in `openspec/changes/` |
+| openspec-apply-change | Apply | Execute task checklist from `tasks.md` |
+| openspec-verify-change | Verify | 3-dimensional report: completeness / correctness / coherence |
+| openspec-archive-change | Archive | Move artifacts to `openspec/changes/archive/`, persist to Engram |
+
+These skills are invoked automatically by sub-agents when the orchestrator delegates an SDD phase — no user instruction required.
+
 ### Auto-routing
 
 Skill discovery is delegated to **Hermes's native mechanism** (`agent/prompt_builder.py:build_skills_system_prompt`, called from `run_agent.py`). On every system-prompt build Hermes scans `~/.hermes/skills/**/SKILL.md`, reads `name + description` from each frontmatter, and injects an `<available_skills>` block into the system prompt with a mandatory instruction to load relevant skills via `skill_view(name)`.
 
 This is the Anthropic Skills progressive-disclosure pattern: lightweight metadata in the system prompt, full skill body loaded on-demand. The catalog is LRU-cached in memory and disk-snapshotted with mtime invalidation, so the token cost is paid once per session, not per turn.
 
-**Cobalt does NOT layer a second skill router on top.** Earlier versions (v0.7.x and prior) used a keyword table in `src/skill_injector.py` to inject `[SKILL REQUIRED]` riders into sub-agent goals — that was redundant with Hermes's native discovery and was removed in v0.8.0. Rich description-based selection by the model strictly beats brittle keyword matching, and skipping the cobalt rider saves tokens on every delegation.
+**SDD skill routing is automatic.** When the orchestrator classifies a request as an EXECUTION TASK, `sdd_triage.py` instructs it to include `skill_view('<openspec-*>')` directives in delegation goals. The matching OpenSpec skill is loaded by the sub-agent before starting work — no user instruction needed. The `_OPENSPEC_SKILL_TO_TASK_TYPE` table in `router.py` also feeds skill-name signals directly into task_type inference for correct model assignment.
 
-If you want to force a specific skill on a sub-agent, write the instruction directly in the orchestrator's goal text: `"Before starting, call skill_view('frontend-design') and apply its rules."` The orchestrator already sees the `<available_skills>` catalog every turn and has enough context to make this call.
+Earlier versions (v0.7.x and prior) used a keyword table in `src/skill_injector.py` to inject `[SKILL REQUIRED]` riders — that was removed in v0.8.0 as redundant. Hermes's native `<available_skills>` discovery plus the auto-SDD routing in v0.9.0 replace it cleanly.
+
+If you want to force a specific skill on a sub-agent for non-SDD work, write the instruction directly in the orchestrator's goal text: `"Before starting, call skill_view('frontend-design') and apply its rules."`
 
 ---
 
@@ -417,13 +436,18 @@ cobalt-agent/
     __init__.py       ← Hook registration, schema patching, routing injection
     router.py         ← task_type inference, model resolution, dynamic timeout
     tool_guard.py     ← Tool blocking for orchestrator
-    skill_injector.py ← Skill instruction injection
-    sdd_triage.py     ← SDD phase classification (pre_llm_call)
+    skill_injector.py ← Skill injection stub (removed in v0.8.0, kept for reference)
+    sdd_triage.py     ← SDD phase classification + OpenSpec skill routing (pre_llm_call)
     compat.py         ← Version compatibility checking
     version_manager.py← Version tracking
     preset_tool.py    ← Preset switching tool
+    config.py         ← Runtime config helpers
+    utils.py          ← Shared utilities
     plugin.yaml       ← Plugin metadata
     presets.yaml      ← Model assignments per task_type
+  scripts/
+    install_openspec_skills.sh ← Installs 5 OpenSpec-compatible SDD skills to ~/.hermes/skills/
+    verify-patch.sh   ← VPS patch drift verifier (deployed by install.sh)
   patches/
     apply_routing_patch.py  ← Source patch applicator (apply/verify/revert)
   docs/
@@ -517,17 +541,18 @@ cd cobalt-agent
 bash install.sh
 ```
 
-El instalador ejecuta 9 pasos de forma autonoma:
+El instalador ejecuta 10 pasos de forma autonoma:
 
 1. **Prerrequisitos** — Verifica Python 3.11+, git, curl, pip
 2. **Hermes Agent** — Clona e instala en `~/.hermes/hermes-agent/`
 3. **OpenCode Go** — Instala proveedor gratuito de modelos (kimi-k2.6, deepseek-v4)
 4. **Source Patch** — Aplica hook de routing a `delegate_tool.py` (reversible)
-5. **Plugin** — Despliega cobalt-routing en `~/.hermes/plugins/` (routing + tool guard + skills + memory protocol)
+5. **Plugin** — Despliega cobalt-routing en `~/.hermes/plugins/` (routing + tool guard + triage + memory protocol)
 6. **Configuracion** — SOUL.md, config.yaml, registro de Engram como servidor MCP
-7. **Skills** — Instala 10 skills curados
-8. **Patch verify automation** — Cron diario con alertas Telegram cuando Hermes rompe el patch
-9. **Verificacion** — Chequeo de 6 puntos (binario, plugin, patch, SOUL, config, version)
+7. **Skills** — Instala skills curados de dominio
+8. **SDD Skills** — Instala 5 skills SDD compatibles con OpenSpec en `~/.hermes/skills/`
+9. **Patch verify automation** — Cron diario con alertas Telegram cuando Hermes rompe el patch
+10. **Verificacion** — Chequeo de 6 puntos (binario, plugin, patch, SOUL, config, version)
 
 ### Configuracion requerida (lo unico que necesitas tocar)
 

@@ -88,6 +88,16 @@ Run this checklist after every version change. Mark PASS/FAIL with date.
 - [ ] Verify: tests run and pass
 - [ ] Archive: learnings saved to Engram via mcp_engram_mem_save / mcp_engram_mem_session_summary
 
+## Auto-SDD Skill Routing (v0.9.0+)
+
+- [ ] Orchestrator auto-includes `skill_view('openspec-explore')` in explore delegations
+- [ ] Orchestrator auto-includes `skill_view('openspec-apply-change')` in apply delegations
+- [ ] Orchestrator auto-includes `skill_view('openspec-verify-change')` in verify delegations
+- [ ] Sub-agent actually invokes skill_view before starting work (check session log)
+- [ ] openspec-* skill in goal text → correct task_type from router (no heuristic fallback)
+- [ ] Conversation prompt (no task) → NO SDD phases, NO skill routing, direct response
+- [ ] `openspec/changes/<name>/` artifacts created when openspec-propose skill is used
+
 ---
 
 ## How to Report
