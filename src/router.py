@@ -166,6 +166,7 @@ _ROLE_TO_TASK_TYPE: Dict[str, str] = {
     "scout": "scout",
 }
 
+
 def resolve_task_type_from_role(role: Optional[str], goal: str) -> str:
     """Resolve task_type considering role as fallback signal from K2.6."""
     if role and role in _ROLE_TO_TASK_TYPE:

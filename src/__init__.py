@@ -1,9 +1,9 @@
-"""Cobalt Routing Plugin v0.7.0 - Model routing + Tool Guard + Skill Injection for Hermes Agent.
+"""Cobalt Routing Plugin v0.9.0 - Model routing + Tool Guard + Auto-SDD Skill Routing for Hermes Agent.
 
 Five enforcement mechanisms via hooks:
 1. TOOL GUARD: Blocks forbidden tools at orchestrator level (pre_tool_call)
 2. MODEL ROUTING: Injects _routed_model into delegate_task (pre_tool_call)
-3. SKILL INJECTION: Instructs sub-agents to load relevant skills (pre_tool_call)
+3. AUTO-SDD SKILL ROUTING: Orchestrator injects skill_view directives for SDD phases (pre_llm_call via sdd_triage)
 4. SDD TRIAGE: Forces orchestrator to classify and select SDD phases (pre_llm_call)
 5. DYNAMIC TIMEOUT: Sets per-task timeout via env var before each delegation (pre_tool_call)
 
