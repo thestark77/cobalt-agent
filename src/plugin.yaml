@@ -1,5 +1,5 @@
 name: cobalt-routing
-version: 0.7.0
+version: 0.9.0
 description: Autonomous model routing, tool guard, skill injection, SDD triage for Hermes Agent
 author: thestark77
 requires_hermes: ">=0.12.0,<1.0.0"

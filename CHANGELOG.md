@@ -4,6 +4,54 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
 
 ---
 
+## v0.9.0 (2026-05-16) — OpenSpec SDD Skills + Auto-SDD Routing
+
+### WORKS (must not regress from v0.8.0)
+- [x] SDD triage injected on every orchestrator turn
+- [x] Triage classification: CONVERSATION → direct response (no SDD), EXECUTION TASK → full SDD pipeline
+- [x] Phases stated match actual delegations
+- [x] Active plan detected → steering variant injected
+- [x] Model routing works (no regression)
+- [x] Tool guard works (no regression)
+- [x] Memory protocol works (no regression)
+- [x] OpenSpec skill directives in delegation goals → correct task_type via existing verb detection (no extra dict needed)
+
+### NEW
+- [x] 5 OpenSpec-compatible SDD skills installed to `~/.hermes/skills/`:
+  `openspec-explore`, `openspec-propose`, `openspec-apply-change`,
+  `openspec-verify-change`, `openspec-archive-change`
+- [x] `sdd_triage.py`: SKILL ROUTING block — orchestrator automatically includes
+  `skill_view('<openspec-*>')` directive in delegation goals for each SDD phase
+- [x] `scripts/install_openspec_skills.sh` — standalone installer for SDD skills
+  (idempotent, cache-invalidating, no npm/CLI dependency)
+
+### BROKEN (known issues — pending v0.9.0 test run)
+- [ ] OpenSpec skills reference `openspec/changes/<name>/` file structure — requires
+  project to have that directory tree (created by openspec-propose); graceful if missing
+- [ ] Skill routing directive in triage is prose-based — depends on orchestrator
+  correctly reading `<available_skills>` block; no mechanical fallback
+
+### CHANGES
+- `src/router.py`: removed fragile `_OPENSPEC_SKILL_TO_TASK_TYPE` keyword dict; existing verb-based `_infer_task_type()` handles skill-enriched goals natively
+- `src/sdd_triage.py`: added SKILL ROUTING block inside EXECUTION TASK branch
+- `src/config.py`: new (from v0.8.0 — was missing from repo)
+- `src/utils.py`: new (from v0.8.0 — was missing from repo)
+- `src/__init__.py` + `src/plugin.yaml`: version bumped to 0.9.0
+- `scripts/install_openspec_skills.sh`: new — installs adapted OpenSpec SDD skills
+
+---
+
+## v0.8.0 (2026-05-14) — Patch Drift Monitoring + Engram Memory Protocol
+
+### CHANGES
+- Replaced Honcho memory backend with Engram (MCP-based, 19 tools)
+- Added patch drift monitoring: GitHub Action + VPS cron + Telegram alerts
+- Added `config.py` and `utils.py` modules
+- Memory protocol is now rule-based (deterministic, not LLM-decision-based)
+- SOUL.md updated with Engram protocol and memory rules
+
+---
+
 ## v0.5.0 (2026-05-04) — SDD Triage + Steering + Versioning + Metrics
 
 ### WORKS (to verify in test)

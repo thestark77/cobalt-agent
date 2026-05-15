@@ -49,6 +49,18 @@ def load_presets() -> None:
         data = yaml.safe_load(presets_path.read_text(encoding="utf-8"))
         _presets = data.get("presets", {})
         _active_preset = data.get("active", "economy")
+        if _active_preset not in _presets:
+            available = list(_presets.keys())
+            logger.warning(
+                "cobalt-routing: active preset '%s' not found in loaded presets. Available: %s",
+                _active_preset, available,
+            )
+            if "economy" in _presets:
+                _active_preset = "economy"
+            elif available:
+                _active_preset = available[0]
+            else:
+                _active_preset = None
         logger.info("cobalt-routing: %d presets loaded, active=%s", len(_presets), _active_preset)
     except Exception as e:
         logger.error("cobalt-routing: failed to load presets: %s", e)
@@ -93,6 +105,10 @@ def resolve_routing(task_type: Optional[str]) -> Optional[Dict[str, Any]]:
         return None
     preset = _presets.get(_active_preset)
     if not preset:
+        logger.warning(
+            "cobalt-routing: routing returning None for task_type=%s because active preset '%s' is missing",
+            task_type, _active_preset,
+        )
         return None
     routing = preset.get("routing", {})
     model = routing.get(task_type) or routing.get("default")
@@ -164,6 +180,7 @@ def resolve_task_type_from_role(role: Optional[str], goal: str) -> str:
 def _infer_task_type(goal: str) -> str:
     """Infer task_type from goal - multi-verb analysis + keyword scoring."""
     goal_lower = goal.lower()
+
     # Limit to first 60 chars for verb-only signals to avoid matching keywords
     # inside file paths or filenames (e.g. "lib-validate-json.py" → verify false positive).
     first_segment = goal_lower[:60]
