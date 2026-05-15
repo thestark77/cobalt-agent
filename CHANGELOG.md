@@ -14,7 +14,7 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
 - [x] Model routing works (no regression)
 - [x] Tool guard works (no regression)
 - [x] Memory protocol works (no regression)
-- [x] OpenSpec skill signal in goal → correct task_type inference (no heuristics needed)
+- [x] OpenSpec skill directives in delegation goals → correct task_type via existing verb detection (no extra dict needed)
 
 ### NEW
 - [x] 5 OpenSpec-compatible SDD skills installed to `~/.hermes/skills/`:
@@ -22,8 +22,6 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
   `openspec-verify-change`, `openspec-archive-change`
 - [x] `sdd_triage.py`: SKILL ROUTING block — orchestrator automatically includes
   `skill_view('<openspec-*>')` directive in delegation goals for each SDD phase
-- [x] `router.py`: `_OPENSPEC_SKILL_TO_TASK_TYPE` dict — openspec-* skill name
-  in goal text feeds directly into task_type inference (highest-confidence signal)
 - [x] `scripts/install_openspec_skills.sh` — standalone installer for SDD skills
   (idempotent, cache-invalidating, no npm/CLI dependency)
 
@@ -34,7 +32,7 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
   correctly reading `<available_skills>` block; no mechanical fallback
 
 ### CHANGES
-- `src/router.py`: added `_OPENSPEC_SKILL_TO_TASK_TYPE` dict + check at top of `_infer_task_type`
+- `src/router.py`: removed fragile `_OPENSPEC_SKILL_TO_TASK_TYPE` keyword dict; existing verb-based `_infer_task_type()` handles skill-enriched goals natively
 - `src/sdd_triage.py`: added SKILL ROUTING block inside EXECUTION TASK branch
 - `src/config.py`: new (from v0.8.0 — was missing from repo)
 - `src/utils.py`: new (from v0.8.0 — was missing from repo)

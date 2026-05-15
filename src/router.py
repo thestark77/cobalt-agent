@@ -166,21 +166,6 @@ _ROLE_TO_TASK_TYPE: Dict[str, str] = {
     "scout": "scout",
 }
 
-_OPENSPEC_SKILL_TO_TASK_TYPE: Dict[str, str] = {
-    "openspec-explore": "explore",
-    "openspec-propose": "propose",
-    "openspec-new-change": "design",
-    "openspec-apply-change": "apply",
-    "openspec-continue-change": "apply",
-    "openspec-ff-change": "apply",
-    "openspec-sync-specs": "apply",
-    "openspec-verify-change": "verify",
-    "openspec-archive-change": "archive",
-    "openspec-bulk-archive-change": "archive",
-    "openspec-onboard": "explore",
-}
-
-
 def resolve_task_type_from_role(role: Optional[str], goal: str) -> str:
     """Resolve task_type considering role as fallback signal from K2.6."""
     if role and role in _ROLE_TO_TASK_TYPE:
@@ -195,14 +180,6 @@ def _infer_task_type(goal: str) -> str:
     """Infer task_type from goal - multi-verb analysis + keyword scoring."""
     goal_lower = goal.lower()
 
-    # OpenSpec skill name in goal is the highest-confidence signal — check first.
-    for skill_name, task_type in _OPENSPEC_SKILL_TO_TASK_TYPE.items():
-        if skill_name in goal_lower:
-            logger.info(
-                "cobalt-routing: inferred task_type=%s from openspec skill ref (%s)",
-                task_type, skill_name,
-            )
-            return task_type
     # Limit to first 60 chars for verb-only signals to avoid matching keywords
     # inside file paths or filenames (e.g. "lib-validate-json.py" → verify false positive).
     first_segment = goal_lower[:60]
