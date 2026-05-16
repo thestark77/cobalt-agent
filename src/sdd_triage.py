@@ -67,7 +67,8 @@ Bias: apply MORE phases rather than fewer for any non-trivial task.
 CRITICAL RULES:
 - Verify and Archive are ALWAYS two separate delegate_task calls with task_type="verify" and task_type="archive".
   NEVER combine them. Verify first, Archive after Verify completes.
-- Archive phase MUST end by saving a session summary to Engram memory (use the session summary tool).
+- Archive phase: BEFORE calling mem_session_summary, you MUST call skill_view("openspec-archive-change") first.
+  Archive phase MUST end by saving a session summary to Engram memory (use the session summary tool).
 """
 
 _SUBAGENT_SKILL_INJECTION = """
