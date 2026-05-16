@@ -40,16 +40,20 @@ Classify this request:
    Tasks→"tasks", Apply→"apply", Verify→"verify", Archive→"archive".
    Never infer or omit task_type. Never combine phases into one delegation.
 
-   SKILL ROUTING (automatic): For EVERY phase you will run, check <available_skills>.
-   If the matching openspec-* skill is listed, YOU (the orchestrator) MUST call
-   skill_view('<skill>') BEFORE delegating that phase, then pass the returned
-   skill content in the delegation's `context` parameter.
-   Do NOT instruct sub-agents to call skill_view — they do not have that tool.
-   Mapping: Explore→openspec-explore, Propose→openspec-propose,
-   Apply→openspec-apply-change, Verify→openspec-verify-change,
-   Archive→openspec-archive-change.
-   This applies to ALL phases including Apply and Verify even when Explore is skipped.
-   This is non-negotiable — do not wait for the user to request it.
+   SKILL ROUTING (mandatory — YOU the orchestrator must do this, not sub-agents):
+   Before delegating each phase, call skill_view for the matching openspec skill.
+   Sub-agents do NOT have skill_view — YOU must call it and pass the result via `context`.
+
+   Phase → skill name (call skill_view with this exact string):
+   - Explore  → "openspec-explore"
+   - Propose  → "openspec-propose"
+   - Apply    → "openspec-apply-change"    ← REQUIRED even when Explore is skipped
+   - Verify   → "openspec-verify-change"   ← REQUIRED even when Explore is skipped
+   - Archive  → "openspec-archive-change"  ← REQUIRED even when Explore is skipped
+
+   These are IN ADDITION TO any other skills (TDD, linting, etc.) you may call.
+   Calling TDD or another skill does NOT substitute for the openspec skill.
+   You must call BOTH if both are relevant — openspec skills are always required.
 
    GOAL NAMING (for correct model routing): Start delegation goals with the
    phase name to ensure correct model assignment:
