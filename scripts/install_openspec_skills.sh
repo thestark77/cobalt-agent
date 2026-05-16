@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SKILLS_DIR="${HOME}/.hermes/skills"
-OPENSPEC_COBALT_VERSION="1.0.0"
+OPENSPEC_COBALT_VERSION="0.9.0"
 
 install_skill() {
   local name="$1"

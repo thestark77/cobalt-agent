@@ -25,11 +25,17 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
 - [x] `scripts/install_openspec_skills.sh` — standalone installer for SDD skills
   (idempotent, cache-invalidating, no npm/CLI dependency)
 
-### BROKEN (known issues — pending v0.9.0 test run)
-- [ ] OpenSpec skills reference `openspec/changes/<name>/` file structure — requires
-  project to have that directory tree (created by openspec-propose); graceful if missing
-- [ ] Skill routing directive in triage is prose-based — depends on orchestrator
-  correctly reading `<available_skills>` block; no mechanical fallback
+### KNOWN LIMITATIONS
+- OpenSpec skills expect `openspec/changes/<name>/` directory tree (created by
+  `openspec-propose`). Skills handle the missing-directory case gracefully; first
+  run of propose creates the structure automatically.
+- Skill routing directive in triage is prose-based — depends on the orchestrator
+  reading `<available_skills>`. Confirmed working across 60+ sessions (100% rate);
+  no mechanical fallback needed in practice.
+
+### TEST RESULTS
+4 consecutive qualifying runs at 100% routing accuracy (iter7–iter10, 2026-05-16).
+All mechanisms green. See `logs/v0.9.0/` and README Test Results table (#14–#17).
 
 ### CHANGES
 - `src/router.py`: removed fragile `_OPENSPEC_SKILL_TO_TASK_TYPE` keyword dict; existing verb-based `_infer_task_type()` handles skill-enriched goals natively
@@ -38,6 +44,12 @@ Format: Each version lists WORKS (must not regress), BROKEN (known issues), and 
 - `src/utils.py`: new (from v0.8.0 — was missing from repo)
 - `src/__init__.py` + `src/plugin.yaml`: version bumped to 0.9.0
 - `scripts/install_openspec_skills.sh`: new — installs adapted OpenSpec SDD skills
+- `install.sh`: bumped to v0.9.0; added Step 8/10 (SDD skills); fixed cleanup trap
+  that deleted source dir on local runs; added `config.py`/`utils.py` to PLUGIN_FILES;
+  renamed steps to X/10
+- `SOUL.md`: split into `cobalt:managed` tagged section + user section below; install.sh
+  now merges instead of overwriting — user additions survive every update; one-time
+  migration backs up untagged installs to `SOUL.md.bak`
 
 ---
 
