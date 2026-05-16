@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 _TRIAGE_INJECTION = """
 [MANDATORY TRIAGE — respond to this BEFORE any delegation or action]
 
-STEP 0: Call `mcp_engram_mem_search` (or `mcp_engram_mem_context` if you only need recent history)
-with the user's topic to check for prior context. See the Engram protocol
+STEP 0: Search memory for prior context on the user's topic before proceeding.
+Use the memory search tool with the topic keywords. See the Engram protocol
 block below for full memory rules.
 
 Classify this request:
@@ -33,16 +33,31 @@ Classify this request:
    - Tasks (atomic breakdown via todo)
    - Apply (write/modify code)
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
-   - Archive (persist final state via `mcp_engram_mem_session_summary` or `mcp_engram_mem_save`)
+   - Archive (persist final state — save session summary to Engram memory)
 
-   SKILL ROUTING (automatic): When delegating a sub-agent for any phase above,
-   check <available_skills>. If the matching openspec-* skill is listed, you MUST
-   include this directive in the delegation goal:
-   "Invoke skill_view('<skill>') for structured phase guidance before starting."
-   Mapping: Explore→openspec-explore, Propose→openspec-propose,
-   Apply→openspec-apply-change, Verify→openspec-verify-change,
-   Archive→openspec-archive-change.
-   This is automatic — do not wait for the user to request it.
+   TASK_TYPE — set this explicitly on EVERY delegate_task call, using these exact values:
+   Explore→"explore", Propose→"propose", Spec→"spec", Design→"design",
+   Tasks→"tasks", Apply→"apply", Verify→"verify", Archive→"archive".
+   Never infer or omit task_type. Never combine phases into one delegation.
+
+   SKILL ROUTING (mandatory — YOU the orchestrator must do this, not sub-agents):
+   Before delegating each phase, call skill_view for the matching openspec skill.
+   Sub-agents do NOT have skill_view — YOU must call it and pass the result via `context`.
+
+   Phase → skill name (call skill_view with this exact string):
+   - Explore  → "openspec-explore"
+   - Propose  → "openspec-propose"
+   - Apply    → "openspec-apply-change"    ← REQUIRED even when Explore is skipped
+   - Verify   → "openspec-verify-change"   ← REQUIRED even when Explore is skipped
+   - Archive  → "openspec-archive-change"  ← REQUIRED even when Explore is skipped
+
+   These are IN ADDITION TO any other skills (TDD, linting, etc.) you may call.
+   Calling TDD or another skill does NOT substitute for the openspec skill.
+   You must call BOTH if both are relevant — openspec skills are always required.
+
+   GOAL NAMING (for correct model routing): Start delegation goals with the
+   phase name to ensure correct model assignment:
+   "Explore whether...", "Apply the fix to...", "Verify that...", "Archive the final state..."
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
@@ -50,8 +65,17 @@ If the scope is unclear or complex, ask the user which phases to apply.
 Bias: apply MORE phases rather than fewer for any non-trivial task.
 
 CRITICAL RULES:
-- Verify must be its OWN separate delegate_task call. Never ask the Apply sub-agent to also verify.
-- Archive phase MUST end with `mcp_engram_mem_session_summary` (or `mcp_engram_mem_save` for a single decision).
+- Verify and Archive are ALWAYS two separate delegate_task calls with task_type="verify" and task_type="archive".
+  NEVER combine them. Verify first, Archive after Verify completes.
+- Archive phase: BEFORE calling mem_session_summary, you MUST call skill_view("openspec-archive-change") first.
+  Archive phase MUST end by saving a session summary to Engram memory (use the session summary tool).
+"""
+
+_SUBAGENT_SKILL_INJECTION = """
+[PHASE GUIDANCE]
+If your task context includes phase-specific skill guidance (e.g., openspec-explore,
+openspec-apply-change, openspec-verify-change), read and follow those instructions carefully
+before taking any other action. They shape how you should approach this phase.
 """
 
 _STEERING_INJECTION = """
@@ -73,13 +97,16 @@ def pre_llm_call_hook(
     conversation_history: list = None,
     **kwargs: Any,
 ) -> Optional[Dict[str, str]]:
-    """Inject triage or steering block on every orchestrator turn.
+    """Inject triage/steering for orchestrator; skill reminder for sub-agents.
 
-    - Sub-agents: never injected
+    - Sub-agents: lightweight skill-invocation reminder if goal has a skill directive
     - Orchestrator with active plan: STEERING variant
     - Orchestrator without active plan: TRIAGE variant
     """
     if task_id and (task_id.startswith("sa-") or task_id.startswith("subagent-")):
+        if user_message and "openspec-" in user_message:
+            logger.info("cobalt-routing: sub-agent phase guidance injected (openspec skill in context)")
+            return {"context": _SUBAGENT_SKILL_INJECTION}
         return None
 
     if not user_message:

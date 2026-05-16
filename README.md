@@ -269,7 +269,7 @@ Configured in `src/presets.yaml`. The "balanced" preset is active by default.
 
 ## Test Results
 
-12 tests across 4 versions, measuring routing accuracy, delegation compliance, skill injection, and SDD triage:
+17 tests across 5 versions, measuring routing accuracy, delegation compliance, skill injection, and SDD triage. v0.9.0 achieved 4 consecutive runs at 100% (iter7–iter10):
 
 | # | Version | Score | Duration | Tokens | Sub-agents | Models Used |
 |---|---|---|---|---|---|---|
@@ -286,7 +286,10 @@ Configured in `src/presets.yaml`. The "balanced" preset is active by default.
 | 11 | v0.6.3 | 95% | 4m 20s | ~19k | 4 | flash + k2.6 + pro |
 | 12 | v0.7.0 | 95% | 4m 08s | ~17k | 4 | flash + k2.6 + pro |
 | 13 | v0.8.0 | 95% | 3m 52s | ~16k | 3 | flash + k2.6 + pro |
-| 14 | v0.9.0 | pending | — | — | — | — |
+| 14 | v0.9.0 | 100% | ~10m | ~20k | 8-11 | flash + k2.6 + pro |
+| 15 | v0.9.0 | 100% | ~10m | ~22k | 9-10 | flash + k2.6 + pro |
+| 16 | v0.9.0 | 100% | ~15m | ~24k | 11 | flash + k2.6 + pro |
+| 17 | v0.9.0 | 100% | ~10m | ~20k | 9 | flash + k2.6 + pro |
 
 **Example test prompt:**
 > "Necesito un script en Python que lea un archivo JSON con datos de ventas, calcule totales por categoría y genere un reporte en markdown."
