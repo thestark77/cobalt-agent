@@ -669,8 +669,54 @@ header "Step 6/10: SOUL.md + Configuration"
 # ============================================================================
 
 if [ -f "$COBALT_TMP/SOUL.md" ]; then
-    cp "$COBALT_TMP/SOUL.md" "$HERMES_HOME/SOUL.md"
-    log "SOUL.md deployed"
+    SOUL_DEST="$HERMES_HOME/SOUL.md"
+    SOUL_SRC="$COBALT_TMP/SOUL.md"
+    SOUL_RESULT=$("$VENV_DIR/bin/python" - "$SOUL_SRC" "$SOUL_DEST" << 'PYEOF'
+import sys
+from pathlib import Path
+
+src_path  = Path(sys.argv[1])
+dest_path = Path(sys.argv[2])
+
+START = "<!-- cobalt:managed:start"
+END   = "<!-- cobalt:managed:end -->"
+
+new_content = src_path.read_text(encoding="utf-8")
+
+if not dest_path.exists():
+    dest_path.write_text(new_content, encoding="utf-8")
+    print("deployed (fresh install)")
+    sys.exit(0)
+
+existing = dest_path.read_text(encoding="utf-8")
+
+if START not in existing:
+    # Old install without tags — back up and deploy fresh (one-time migration)
+    bak = dest_path.with_suffix(".md.bak")
+    bak.write_text(existing, encoding="utf-8")
+    dest_path.write_text(new_content, encoding="utf-8")
+    print(f"deployed (migrated — backup saved to {bak.name})")
+    sys.exit(0)
+
+# Extract the user section: everything after the END marker
+end_idx = existing.find(END)
+user_section = existing[end_idx + len(END):] if end_idx != -1 else ""
+
+# Extract the managed block from the new source
+start_new = new_content.find(START)
+end_new   = new_content.find(END)
+if start_new == -1 or end_new == -1:
+    # Source lost its tags — deploy as-is (shouldn't happen in normal releases)
+    dest_path.write_text(new_content, encoding="utf-8")
+    print("deployed (untagged source)")
+    sys.exit(0)
+
+managed_block = new_content[start_new : end_new + len(END)]
+dest_path.write_text(managed_block + user_section, encoding="utf-8")
+print("merged (cobalt section updated, user additions preserved)")
+PYEOF
+    )
+    log "SOUL.md $SOUL_RESULT"
 else
     warn "SOUL.md not found in source, skipping"
 fi

@@ -47,7 +47,7 @@ cobalt-agent fixes all four through a **hook-based plugin** — no forks, no cor
 The design principles:
 
 1. **Non-invasive** — One source patch + external plugin. Everything else is additive.
-2. **Update-resilient** — Detects breaking changes, warns on untested versions, errors on incompatible ones.
+2. **Update-resilient** — Detects breaking changes, warns on untested versions, errors on incompatible ones. SOUL.md uses tagged sections so user additions survive every update.
 3. **Replicable** — Single command installs the complete environment from scratch.
 4. **Modular** — Each mechanism (routing, guard, skills, triage, timeout) is independent.
 
@@ -135,6 +135,24 @@ hermes chat
 ```
 
 If you skipped the Engram env vars on first run, export them and re-run `bash install.sh` — the installer is idempotent and will simply wire the missing pieces (Engram MCP, cron) without touching anything else.
+
+### Customizing SOUL.md
+
+`~/.hermes/SOUL.md` is split into two sections:
+
+```
+<!-- cobalt:managed:start — managed by install.sh, do not edit between these markers -->
+[cobalt rules — updated automatically on every install.sh run]
+<!-- cobalt:managed:end -->
+
+<!-- ── YOUR CUSTOM INSTRUCTIONS ── -->
+Add persona, business logic, language preferences, domain knowledge here.
+This section is NEVER modified by install.sh updates. Safe to edit freely.
+```
+
+Add anything below the closing `<!-- cobalt:managed:end -->` tag. On the next `bash install.sh`, only the managed block is replaced — your additions survive untouched.
+
+**Migration**: if you have an existing `~/.hermes/SOUL.md` without the tags (installed before v0.9.0), the installer backs it up to `SOUL.md.bak` and deploys the tagged version. Move your custom content below the closing tag afterwards.
 
 ### Per-Project Context
 
@@ -349,7 +367,7 @@ After installation, all config lives in `~/.hermes/`:
 | File | Purpose |
 |---|---|
 | `config.yaml` | Model defaults, delegation settings, plugin list, Engram MCP server |
-| `SOUL.md` | Orchestrator instructions (delegation rules, triage, memory protocol, format) |
+| `SOUL.md` | Orchestrator instructions (delegation rules, triage, memory protocol, format). Split into a `cobalt:managed` section (updated automatically) and a user section below the closing tag (never touched by install.sh). |
 | `cobalt-cron.env` | Token storage for the patch-verify cron (mode 600) |
 | `cobalt-verify-patch.sh` | Daily verifier script (managed by install.sh) |
 | `cobalt-cron.log` | Output log from the verify cron |
@@ -514,7 +532,7 @@ cobalt-agent resuelve los cuatro problemas mediante un **plugin basado en hooks*
 Principios de diseno:
 
 1. **No invasivo** — Un patch + plugin externo. Todo lo demas es aditivo.
-2. **Resiliente a actualizaciones** — Detecta cambios incompatibles, advierte en versiones no probadas, bloquea en versiones incompatibles.
+2. **Resiliente a actualizaciones** — Detecta cambios incompatibles, advierte en versiones no probadas, bloquea en versiones incompatibles. SOUL.md usa secciones marcadas para que las adiciones del usuario sobrevivan cada actualización.
 3. **Replicable** — Un solo comando instala el entorno completo desde cero.
 4. **Modular** — Cada mecanismo (routing, guard, skills, triage, timeout) es independiente.
 
@@ -595,6 +613,24 @@ hermes chat
 ```
 
 Si omitiste las variables de Engram en la primera corrida, expórtalas y vuelve a ejecutar `bash install.sh` — el instalador es idempotente y solo cablea lo que falta sin tocar el resto.
+
+### Personalizar SOUL.md
+
+`~/.hermes/SOUL.md` tiene dos secciones:
+
+```
+<!-- cobalt:managed:start — managed by install.sh, do not edit between these markers -->
+[reglas de cobalt — se actualizan automáticamente con cada install.sh]
+<!-- cobalt:managed:end -->
+
+<!-- ── YOUR CUSTOM INSTRUCTIONS ── -->
+Agrega persona, business logic, preferencias de idioma, conocimiento de dominio aquí.
+Esta sección NUNCA es modificada por las actualizaciones de install.sh.
+```
+
+Agrega lo que quieras debajo del tag `<!-- cobalt:managed:end -->`. En el próximo `bash install.sh`, solo el bloque managed se reemplaza — tus adiciones sobreviven intactas.
+
+**Migración**: si tienes un `~/.hermes/SOUL.md` existente sin los tags (instalado antes de v0.9.0), el instalador lo respalda a `SOUL.md.bak` y despliega la versión con tags. Mueve tu contenido personalizado debajo del tag de cierre después.
 
 ### Contexto por Proyecto
 
