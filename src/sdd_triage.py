@@ -41,12 +41,18 @@ Classify this request:
    Never infer or omit task_type. Never combine phases into one delegation.
 
    SKILL ROUTING (automatic): For each delegation, check <available_skills>.
-   If the matching openspec-* skill is listed, the delegation goal MUST start with:
-   "MANDATORY — call skill_view('<skill>') as your FIRST tool call before anything else."
+   If the matching openspec-* skill is listed, YOU (the orchestrator) MUST call
+   skill_view('<skill>') BEFORE delegating that phase, then pass the returned
+   skill content in the delegation's `context` parameter.
+   Do NOT instruct sub-agents to call skill_view — they do not have that tool.
    Mapping: Explore→openspec-explore, Propose→openspec-propose,
    Apply→openspec-apply-change, Verify→openspec-verify-change,
    Archive→openspec-archive-change.
    This is non-negotiable — do not wait for the user to request it.
+
+   GOAL NAMING (for correct model routing): Start delegation goals with the
+   phase name to ensure correct model assignment:
+   "Explore whether...", "Apply the fix to...", "Verify that...", "Archive the final state..."
 
 State your classification in ONE line before proceeding.
 Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
@@ -60,11 +66,10 @@ CRITICAL RULES:
 """
 
 _SUBAGENT_SKILL_INJECTION = """
-[MANDATORY FIRST ACTION]
-If your task goal starts with "MANDATORY — call skill_view" or contains "skill_view('<skill>')",
-you MUST call that skill_view tool as your VERY FIRST tool call — before reading any file,
-running any command, or doing any other work. The skill provides phase-specific guidance
-that shapes all subsequent decisions. Skipping it is a protocol violation.
+[PHASE GUIDANCE]
+If your task context includes phase-specific skill guidance (e.g., openspec-explore,
+openspec-apply-change, openspec-verify-change), read and follow those instructions carefully
+before taking any other action. They shape how you should approach this phase.
 """
 
 _STEERING_INJECTION = """
@@ -93,8 +98,8 @@ def pre_llm_call_hook(
     - Orchestrator without active plan: TRIAGE variant
     """
     if task_id and (task_id.startswith("sa-") or task_id.startswith("subagent-")):
-        if user_message and "skill_view(" in user_message:
-            logger.info("cobalt-routing: sub-agent skill reminder injected (skill_view directive in goal)")
+        if user_message and "openspec-" in user_message:
+            logger.info("cobalt-routing: sub-agent phase guidance injected (openspec skill in context)")
             return {"context": _SUBAGENT_SKILL_INJECTION}
         return None
 
