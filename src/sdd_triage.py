@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 _TRIAGE_INJECTION = """
 [MANDATORY TRIAGE — respond to this BEFORE any delegation or action]
 
-STEP 0: Call `mcp_engram_mem_search` (or `mcp_engram_mem_context` if you only need recent history)
-with the user's topic to check for prior context. See the Engram protocol
+STEP 0: Search memory for prior context on the user's topic before proceeding.
+Use the memory search tool with the topic keywords. See the Engram protocol
 block below for full memory rules.
 
 Classify this request:
@@ -33,14 +33,14 @@ Classify this request:
    - Tasks (atomic breakdown via todo)
    - Apply (write/modify code)
    - Verify (test/validate — ALWAYS a separate delegation, never combined with Apply)
-   - Archive (persist final state via `mcp_engram_mem_session_summary` or `mcp_engram_mem_save`)
+   - Archive (persist final state — save session summary to Engram memory)
 
    TASK_TYPE — set this explicitly on EVERY delegate_task call, using these exact values:
    Explore→"explore", Propose→"propose", Spec→"spec", Design→"design",
    Tasks→"tasks", Apply→"apply", Verify→"verify", Archive→"archive".
    Never infer or omit task_type. Never combine phases into one delegation.
 
-   SKILL ROUTING (automatic): For each delegation, check <available_skills>.
+   SKILL ROUTING (automatic): For EVERY phase you will run, check <available_skills>.
    If the matching openspec-* skill is listed, YOU (the orchestrator) MUST call
    skill_view('<skill>') BEFORE delegating that phase, then pass the returned
    skill content in the delegation's `context` parameter.
@@ -48,6 +48,7 @@ Classify this request:
    Mapping: Explore→openspec-explore, Propose→openspec-propose,
    Apply→openspec-apply-change, Verify→openspec-verify-change,
    Archive→openspec-archive-change.
+   This applies to ALL phases including Apply and Verify even when Explore is skipped.
    This is non-negotiable — do not wait for the user to request it.
 
    GOAL NAMING (for correct model routing): Start delegation goals with the
@@ -62,7 +63,7 @@ Bias: apply MORE phases rather than fewer for any non-trivial task.
 CRITICAL RULES:
 - Verify and Archive are ALWAYS two separate delegate_task calls with task_type="verify" and task_type="archive".
   NEVER combine them. Verify first, Archive after Verify completes.
-- Archive phase MUST end with `mcp_engram_mem_session_summary` (or `mcp_engram_mem_save` for a single decision).
+- Archive phase MUST end by saving a session summary to Engram memory (use the session summary tool).
 """
 
 _SUBAGENT_SKILL_INJECTION = """
