@@ -186,7 +186,7 @@ def _infer_task_type(goal: str) -> str:
     first_segment = goal_lower[:60]
     full_segment = goal_lower[:120]
 
-    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "modifica", "modificar", "modify", "refactoriza", "agrega", "agregar", "añade", "añadir", "actualiza", "actualizar", "extiende", "extender", "write", "implement", "create", "build", "develop", "make", "code", "programa", "add", "append", "update", "extend"]
+    creation_verbs = ["crea", "escribe", "implementa", "genera", "construye", "modifica", "modificar", "modify", "refactoriza", "agrega", "agregar", "añade", "añadir", "actualiza", "actualizar", "extiende", "extender", "write", "implement", "create", "build", "develop", "make", "code", "programa", "add", "append", "update", "extend", "apply"]
     verify_verbs = ["verifica", "testea", "prueba", "ejecuta", "run", "test", "check if", "confirma", "verify", "ensure", "confirm"]
     verify_intent_signals = ["verify that", "check that", "ensure that", "confirm that", "verifica que", "comprobar que", "report the"]
     scout_verbs = ["busca", "encuentra", "search", "find", "locate", "descubre"]
@@ -195,11 +195,21 @@ def _infer_task_type(goal: str) -> str:
 
     leading_segment = goal_lower[:30]
 
-    # Apply leading verb wins unconditionally — checked before verify to prevent
-    # filenames in the path (e.g. "lib-validate-json.py") from hijacking routing.
+    # Leading verb wins unconditionally — checked before verify to prevent
+    # filenames in the path (e.g. "lib-validate-json.py", "test_flatten.py") from
+    # hijacking routing when the real intent is in the first word.
     if any(v in leading_segment for v in creation_verbs):
         logger.info("cobalt-routing: inferred task_type=apply from goal (leading verb)")
         return "apply"
+
+    # Explore/scout leading signal checked before verify — prevents false positives
+    # when filenames like test_X.py appear early in the goal text.
+    if any(v in leading_segment for v in explore_verbs):
+        logger.info("cobalt-routing: inferred task_type=explore from goal (leading verb)")
+        return "explore"
+    if any(v in leading_segment for v in scout_verbs):
+        logger.info("cobalt-routing: inferred task_type=scout from goal (leading verb)")
+        return "scout"
 
     if any(v in first_segment for v in verify_verbs):
         logger.info("cobalt-routing: inferred task_type=verify from goal (verb match)")
