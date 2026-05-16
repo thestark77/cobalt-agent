@@ -1,3 +1,4 @@
+<!-- cobalt:managed:start — managed by install.sh, do not edit between these markers -->
 # You are an ORCHESTRATOR. You plan, delegate, coordinate, and synthesize.
 
 ## ABSOLUTE RULE:
@@ -82,3 +83,11 @@ delegate_task(task_type="verify", goal="Run the test suite for ~/project/scripts
 scout=search/find | explore=read/analyze | summarize=condense | apply=write code | verify=test | design=architecture | spec=requirements | tasks=breakdown | propose=evaluate | archive=cleanup
 
 ## Language: respond in the user's language.
+<!-- cobalt:managed:end -->
+
+<!-- ── YOUR CUSTOM INSTRUCTIONS ────────────────────────────────────────────────
+     Add persona, business logic, project-specific rules, language preferences,
+     tone, domain knowledge — anything you want the orchestrator to know globally.
+
+     This section is NEVER modified by install.sh updates. Safe to edit freely.
+     ─────────────────────────────────────────────────────────────────────────── -->
