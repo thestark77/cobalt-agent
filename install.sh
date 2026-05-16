@@ -12,7 +12,7 @@ set -euo pipefail
 # tested configuration without touching private credentials.
 # ============================================================================
 
-COBALT_VERSION="0.8.0"
+COBALT_VERSION="0.9.0"
 HERMES_REPO="https://github.com/NousResearch/hermes-agent.git"
 HERMES_TESTED_TAG=""
 HERMES_TESTED_VERSION="0.13.0"
@@ -24,6 +24,7 @@ HERMES_AGENT_DIR="$HERMES_HOME/hermes-agent"
 PLUGIN_DIR="$HERMES_HOME/plugins/cobalt-routing"
 COBALT_REPO="https://github.com/thestark77/cobalt-agent.git"
 COBALT_TMP="/tmp/cobalt-agent-$$"
+COBALT_TMP_ORIGINAL="$COBALT_TMP"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,7 +40,14 @@ err()   { echo -e "${RED}[cobalt]${NC} $*" >&2; }
 info()  { echo -e "${CYAN}[cobalt]${NC} $*"; }
 header(){ echo -e "\n${BLUE}━━━ $* ━━━${NC}\n"; }
 
-cleanup() { rm -rf "$COBALT_TMP" 2>/dev/null || true; }
+cleanup() {
+    # Only delete COBALT_TMP when it is our own temp dir — NOT when running
+    # locally (COBALT_TMP gets reassigned to SCRIPT_DIR in Step 4, which would
+    # delete the entire cobalt-agent source checkout on exit).
+    if [ "${COBALT_TMP}" = "${COBALT_TMP_ORIGINAL}" ]; then
+        rm -rf "$COBALT_TMP" 2>/dev/null || true
+    fi
+}
 trap cleanup EXIT
 
 # ── Cron helpers ────────────────────────────────────────────────────────────
@@ -318,9 +326,10 @@ if [ "$IS_UPDATE" -eq 1 ]; then
     echo "  4. Re-apply source patch (safe if already applied)"
     echo "  5. Update cobalt-routing plugin to v${COBALT_VERSION}"
     echo "  6. Update SOUL.md + merge config (preserves your settings) + Engram MCP"
-    echo "  7. Update skills"
-    echo "  8. Patch verify automation (cron + Telegram alerts)"
-    echo "  9. Verify everything"
+    echo "  7. Update skills (15 curated skills)"
+    echo "  8. Update SDD skills (5 OpenSpec-compatible skills)"
+    echo "  9. Patch verify automation (cron + Telegram alerts)"
+    echo " 10. Verify everything"
 else
     echo "This installer will set up:"
     echo "  1. Prerequisites check"
@@ -330,8 +339,9 @@ else
     echo "  5. cobalt-routing plugin (routing + tool guard + skills + memory protocol)"
     echo "  6. SOUL.md + configuration + Engram MCP server"
     echo "  7. Skills (15 curated skills)"
-    echo "  8. Patch verify automation (cron + Telegram alerts)"
-    echo "  9. Verification"
+    echo "  8. SDD Skills (5 OpenSpec-compatible skills)"
+    echo "  9. Patch verify automation (cron + Telegram alerts)"
+    echo " 10. Verification"
 fi
 echo ""
 echo "Required env vars (set before running):"
@@ -344,7 +354,7 @@ echo "  COBALT_INSTALL_CRON=0                    — skip cron job installation"
 echo ""
 
 # ============================================================================
-header "Step 1/9: Prerequisites"
+header "Step 1/10: Prerequisites"
 # ============================================================================
 
 check_cmd() {
@@ -393,7 +403,7 @@ else
 fi
 
 # ============================================================================
-header "Step 2/9: Hermes Agent"
+header "Step 2/10: Hermes Agent"
 # ============================================================================
 
 VENV_DIR="$HERMES_AGENT_DIR/venv"
@@ -493,7 +503,7 @@ FINAL_VER=$(read_hermes_version)
 log "Hermes Agent v$FINAL_VER ready"
 
 # ============================================================================
-header "Step 3/9: OpenCode Go Provider"
+header "Step 3/10: OpenCode Go Provider"
 # ============================================================================
 
 # Make sure ~/.local/bin (where we drop OpenCode/Engram symlinks) is on PATH
@@ -565,7 +575,7 @@ fi
 log "Provider will be configured in Step 6"
 
 # ============================================================================
-header "Step 4/9: Source Patch (delegate_tool.py)"
+header "Step 4/10: Source Patch (delegate_tool.py)"
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -604,7 +614,7 @@ else
 fi
 
 # ============================================================================
-header "Step 5/9: cobalt-routing Plugin"
+header "Step 5/10: cobalt-routing Plugin"
 # ============================================================================
 
 if [ "$IS_UPDATE" -eq 1 ] && [ -f "$PLUGIN_DIR/__init__.py" ]; then
@@ -631,6 +641,8 @@ PLUGIN_FILES=(
     "version_manager.py"
     "compat.py"
     "preset_tool.py"
+    "config.py"
+    "utils.py"
     "plugin.yaml"
     "presets.yaml"
 )
@@ -653,7 +665,7 @@ done
 log "Plugin installed at $PLUGIN_DIR ($COPIED files)"
 
 # ============================================================================
-header "Step 6/9: SOUL.md + Configuration"
+header "Step 6/10: SOUL.md + Configuration"
 # ============================================================================
 
 if [ -f "$COBALT_TMP/SOUL.md" ]; then
@@ -844,7 +856,7 @@ fi
 log "Configuration complete"
 
 # ============================================================================
-header "Step 7/9: Skills Installation"
+header "Step 7/10: Skills Installation"
 # ============================================================================
 
 SKILLS_DIR="$HERMES_HOME/skills"
@@ -1026,14 +1038,25 @@ else
 fi
 
 # ============================================================================
-header "Step 8/9: Patch verify automation"
+header "Step 8/10: SDD Skills (OpenSpec-compatible)"
+# ============================================================================
+
+SDD_SKILLS_SCRIPT="$COBALT_TMP/scripts/install_openspec_skills.sh"
+if [ -f "$SDD_SKILLS_SCRIPT" ]; then
+    bash "$SDD_SKILLS_SCRIPT" || warn "SDD skills install reported errors (non-critical — check output above)"
+else
+    warn "install_openspec_skills.sh not found at $SDD_SKILLS_SCRIPT — skipping SDD skills"
+fi
+
+# ============================================================================
+header "Step 9/10: Patch verify automation"
 # ============================================================================
 
 # engram binary check is handled in Step 6 (before MCP wiring) — no need to repeat.
 setup_verify_cron
 
 # ============================================================================
-header "Step 9/9: Verification"
+header "Step 10/10: Verification"
 # ============================================================================
 
 CHECKS=0
@@ -1097,6 +1120,7 @@ header "$([ "$IS_UPDATE" -eq 1 ] && echo 'Update' || echo 'Installation') Comple
 
 if [ "$CHECKS" -eq "$TOTAL" ]; then
     log "All checks passed ($CHECKS/$TOTAL)"
+    log "cobalt-routing v${COBALT_VERSION} active — model routing + SDD skills ready"
 else
     warn "Some checks failed ($CHECKS/$TOTAL) — review warnings above"
 fi
