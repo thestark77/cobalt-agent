@@ -281,7 +281,7 @@ Three tiers via OpenCode Go (free):
 | Mid | apply, archive | kimi-k2.6 | Write code, implement |
 | Reasoning | design, spec, tasks, verify, propose | deepseek-v4-pro | Architecture, testing, decisions |
 
-Configured in `src/presets.yaml`. The "balanced" preset is active by default.
+Configured in `src/presets.yaml`. The "economy" preset is active by default.
 
 ---
 
