@@ -14,8 +14,9 @@ The 5 tools exposed by the iris MCP server (x-contract-version: 2):
   iris.remember     — write an observation to Engram + brain store
   iris.decide       — weighted decision support (WSM)
 
-Hermes prefixes MCP tools as mcp_<server>_<tool>, so these surface as
-mcp_iris_iris.search, mcp_iris_iris.get_context, etc.
+Hermes prefixes MCP tools as mcp_<server>_<tool> and sanitizes dots to
+underscores, so these surface as mcp_iris_iris_search, mcp_iris_iris_get_context,
+etc. (all underscores — the callable name has no dot).
 """
 
 import logging
@@ -34,26 +35,26 @@ project knowledge graph.
 
 # TOOLS
 
-mcp_iris_iris.search(query, limit?)
+mcp_iris_iris_search(query, limit?)
   Full-text / semantic search over brain_nodes. Use before diving into an
   unknown codebase area, before answering questions about past decisions, or
   when asked "what do we know about X".
 
-mcp_iris_iris.get_context(topic?, limit?)
+mcp_iris_iris_get_context(topic?, limit?)
   Retrieve persona + contextually relevant brain_nodes for the current
   session. Call once at the start of a complex task to load relevant
   background before planning.
 
-mcp_iris_iris.timeline(since?, until?, limit?)
+mcp_iris_iris_timeline(since?, until?, limit?)
   Chronological event log of observations. Use to reconstruct "what happened
   last week on X" or to audit a sequence of changes.
 
-mcp_iris_iris.remember(content, topic_key?, type?)
+mcp_iris_iris_remember(content, topic_key?, type?)
   Write a new observation to the Iris brain store. Call whenever you make an
   architectural decision, find a non-obvious gotcha, or establish a convention
   — the same triggers as Engram mem_save.
 
-mcp_iris_iris.decide(question, options, criteria?)
+mcp_iris_iris_decide(question, options, criteria?)
   Weighted-sum decision support (WSM). Use when you have 2+ alternatives and
   want a structured trade-off analysis before recommending a direction.
 

@@ -60,11 +60,13 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # Listed here so the orchestrator can query Iris directly without a round
     # trip through delegate_task. These are no-ops when the server is absent
     # (the tools simply will not exist in the namespace).
-    "mcp_iris_iris.search",
-    "mcp_iris_iris.get_context",
-    "mcp_iris_iris.timeline",
-    "mcp_iris_iris.remember",
-    "mcp_iris_iris.decide",
+    # Hermes sanitizes dots in MCP tool names to underscores, so iris's
+    # `iris.search` is exposed as `mcp_iris_iris_search` (all underscores).
+    "mcp_iris_iris_search",
+    "mcp_iris_iris_get_context",
+    "mcp_iris_iris_timeline",
+    "mcp_iris_iris_remember",
+    "mcp_iris_iris_decide",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.
