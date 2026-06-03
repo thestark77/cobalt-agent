@@ -7,3 +7,6 @@ homepage: https://github.com/thestark77/cobalt-agent
 provides_hooks:
   - pre_tool_call
   - pre_llm_call
+provides_tools:
+  - cobalt_preset
+  - cobalt_firewall

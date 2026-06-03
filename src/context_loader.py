@@ -102,6 +102,7 @@ def _read_context_file(path: Path) -> str:
     if not text:
         return ""
 
+    adr_index = _list_adrs(path)
     return (
         "[PROJECT CONTEXT — loaded from "
         f"{path}]\n"
@@ -110,6 +111,41 @@ def _read_context_file(path: Path) -> str:
         "subsequent work in this session. Do NOT delegate a scout to read it "
         "again — it is already loaded below.\n\n"
         f"{text}\n"
+        f"{adr_index}"
+    )
+
+
+_ADR_MAX = 20  # maximum ADR filenames to include in the index
+
+
+def _list_adrs(context_path: Path) -> str:
+    """Return a short ADR index string, or empty string if none found.
+
+    Scans docs/adr/ relative to the directory that contains context_path.
+    Lists filenames only (no content), capped at _ADR_MAX entries, sorted
+    lexicographically (the conventional NNNN-title.md naming gives chrono
+    order for free).
+    """
+    base = context_path.parent
+    adr_dir = base / "docs" / "adr"
+    if not adr_dir.is_dir():
+        return ""
+    try:
+        entries = sorted(
+            p.name
+            for p in adr_dir.iterdir()
+            if p.is_file() and p.suffix in (".md", ".txt", ".rst")
+        )
+    except OSError:
+        return ""
+    if not entries:
+        return ""
+    cap = entries[:_ADR_MAX]
+    tail = f"\n  … ({len(entries) - _ADR_MAX} more)" if len(entries) > _ADR_MAX else ""
+    lines = "\n".join(f"  - {name}" for name in cap)
+    return (
+        f"\n[ADR INDEX — {len(cap)} of {len(entries)} decision record(s) in docs/adr/]\n"
+        f"{lines}{tail}\n"
     )
 
 

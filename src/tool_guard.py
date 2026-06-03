@@ -20,6 +20,7 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # persistent memory must flow through Engram via the `mcp_engram_mem_*`
     # tools listed below, which sync to Engram Cloud automatically.
     "cobalt_preset",
+    "cobalt_firewall",
     "clarify",
     "todo",
     "skills_list",
@@ -55,6 +56,15 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_engram_mem_merge_projects",
     # markitdown MCP (Microsoft) — file conversion, cheap, no need to delegate.
     "mcp_markitdown_convert_to_markdown",
+    # Iris brain MCP — knowledge graph, context retrieval, decision support.
+    # Listed here so the orchestrator can query Iris directly without a round
+    # trip through delegate_task. These are no-ops when the server is absent
+    # (the tools simply will not exist in the namespace).
+    "mcp_iris_iris.search",
+    "mcp_iris_iris.get_context",
+    "mcp_iris_iris.timeline",
+    "mcp_iris_iris.remember",
+    "mcp_iris_iris.decide",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.

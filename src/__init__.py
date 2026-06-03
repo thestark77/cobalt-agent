@@ -179,13 +179,66 @@ def _inject_routing(task_dict: dict, task_type: str) -> None:
 
 
 def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
-    """Unified pre_tool_call hook: guard + routing + timeout.
+    """Unified pre_tool_call hook: firewall + guard + routing + timeout.
 
-    1. GUARD: If orchestrator tries a forbidden tool, return block directive.
-    2. ROUTING: If delegate_task, inject _routed_model based on task_type.
-    3. TIMEOUT: Set per-task timeout via env var.
+    1. FIREWALL: If the terminal tool is called, inspect the command against
+       the irreversibility firewall rules. Blocks or warns depending on mode.
+       Fail-open: any exception in firewall logic allows the command through.
+    2. GUARD: If orchestrator tries a forbidden tool, return block directive.
+    3. ROUTING: If delegate_task, inject _routed_model based on task_type.
+    4. TIMEOUT: Set per-task timeout via env var.
     """
     task_id = kwargs.get("task_id", "")
+
+    # --- Firewall check (command/code-bearing tools) ---
+    # Inspect every tool that can run a shell command or arbitrary code, not just
+    # `terminal`: a live red-team test showed an agent that, once `rm -rf` was
+    # blocked on terminal, could fall back to `rm -r` or to execute_code. Map each
+    # such tool to the arg key that carries its payload.
+    #   terminal      -> args["command"]   (terminal_tool.py)
+    #   execute_code  -> args["code"]       (code_execution_tool.py)
+    #   process       -> args["command"]    (process_registry.py)
+    _FW_TOOLS = {"terminal": "command", "execute_code": "code", "process": "command"}
+    if tool_name in _FW_TOOLS:
+        try:
+            from firewall import evaluate
+            from firewall_tool import load_firewall_config
+            fw_enabled, fw_mode = load_firewall_config()
+            if fw_enabled:
+                key = _FW_TOOLS[tool_name]
+                # Defensively extract the payload from multiple possible shapes.
+                payload = None
+                if isinstance(args, dict):
+                    payload = args.get(key)
+                    if payload is None:
+                        tool_input = args.get("tool_input") or args.get("input") or {}
+                        if isinstance(tool_input, dict):
+                            payload = tool_input.get(key)
+                if payload and isinstance(payload, str):
+                    # execute_code/process carry arbitrary code → enable the
+                    # code-only destructive-pattern safety net.
+                    result = evaluate(payload, fw_mode, is_code=(tool_name != "terminal"))
+                    if result.get("blocked"):
+                        logger.warning(
+                            "cobalt-firewall: BLOCKED %s (mode=%s, rules=%s)",
+                            tool_name,
+                            fw_mode,
+                            [h["rule_id"] for h in result.get("hits", [])],
+                        )
+                        return {
+                            "action": "block",
+                            "message": result["message"],
+                        }
+                    elif result.get("hits"):
+                        # warn mode: non-irreversible hits — log and allow
+                        logger.warning(
+                            "cobalt-firewall: WARN %s allowed but hit rules: %s",
+                            tool_name,
+                            [h["rule_id"] for h in result["hits"]],
+                        )
+        except Exception as exc:
+            # Fail-open: firewall errors must never break normal operations
+            logger.debug("cobalt-firewall: exception (fail-open): %s", exc)
 
     from tool_guard import check_tool_allowed
     block = check_tool_allowed(tool_name, task_id)
@@ -258,7 +311,7 @@ def _pre_llm_call_hook(
     conversation_history: list = None,
     **kwargs,
 ):
-    """Composite pre_llm_call hook: SDD triage + Engram memory + markitdown.
+    """Composite pre_llm_call hook: SDD triage + Engram memory + markitdown + iris.
 
     Sub-agents receive nothing (their context comes from the goal suffix).
     Orchestrator receives all blocks concatenated, every turn.
@@ -273,6 +326,7 @@ def _pre_llm_call_hook(
     triage_hook = None
     build_memory_protocol_block = None
     build_markitdown_protocol_block = None
+    build_iris_protocol_block = None
     build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
@@ -291,6 +345,10 @@ def _pre_llm_call_hook(
     except ImportError as exc:
         logger.warning("cobalt-routing: markitdown_protocol import failed (%s)", exc)
     try:
+        from iris_protocol import build_iris_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: iris_protocol import failed (%s)", exc)
+    try:
         from context_loader import build_context_block
     except ImportError as exc:
         logger.warning("cobalt-routing: context_loader import failed (%s)", exc)
@@ -306,6 +364,7 @@ def _pre_llm_call_hook(
         )
     memory = build_memory_protocol_block(task_id=task_id) if build_memory_protocol_block else None
     markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
+    iris = build_iris_protocol_block(task_id=task_id) if build_iris_protocol_block else None
     session_id = kwargs.get("session_id", "")
     project_context = (
         build_context_block(task_id=task_id, session_id=session_id)
@@ -315,7 +374,7 @@ def _pre_llm_call_hook(
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (project_context, triage_ctx, memory, markdown) if p]
+    parts = [p for p in (project_context, triage_ctx, memory, markdown, iris) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}
@@ -331,6 +390,11 @@ def register(ctx):
     from compat import check_version, verify_patch_applied
     from router import load_presets
     from preset_tool import TOOL_NAME, TOOL_SCHEMA, handle_preset
+    from firewall_tool import (
+        TOOL_NAME as FW_TOOL_NAME,
+        TOOL_SCHEMA as FW_TOOL_SCHEMA,
+        handle_firewall,
+    )
 
     status = check_version()
     if status == "error":
@@ -362,6 +426,18 @@ def register(ctx):
         emoji="⚡",
     )
 
+    try:
+        ctx.register_tool(
+            name=FW_TOOL_NAME,
+            toolset="cobalt",
+            schema=FW_TOOL_SCHEMA,
+            handler=handle_firewall,
+            description="Manage cobalt irreversibility firewall (status, set, enable, disable)",
+            emoji="🛡",
+        )
+    except Exception as exc:
+        logger.warning("cobalt-firewall: tool registration failed (continuing): %s", exc)
+
     ctx.register_hook("pre_tool_call", _pre_tool_call_hook)
     ctx.register_hook("pre_llm_call", _pre_llm_call_hook)
 
@@ -369,10 +445,17 @@ def register(ctx):
         logger.info("cobalt-routing: schema patch deferred to first delegate_task call")
 
     from tool_guard import _guard_enabled, ORCHESTRATOR_ALLOWED
+    try:
+        from firewall_tool import load_firewall_config as _fw_cfg
+        _fw_on, _fw_mode = _fw_cfg()
+        _fw_status = f"{_fw_mode}" if _fw_on else "OFF"
+    except Exception:
+        _fw_status = "?"
     logger.info(
-        "cobalt-routing v%s loaded (patch=%s, guard=%s, skills=ON, timeout=DYNAMIC, allowed=%d tools)",
+        "cobalt-routing v%s loaded (patch=%s, guard=%s, firewall=%s, skills=ON, timeout=DYNAMIC, allowed=%d tools)",
         PLUGIN_VERSION,
         "OK" if patch_ok else "MISSING",
         "ON" if _guard_enabled else "OFF",
+        _fw_status,
         len(ORCHESTRATOR_ALLOWED),
     )
