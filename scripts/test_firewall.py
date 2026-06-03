@@ -81,7 +81,7 @@ check("rm --recursive --force /", blocked("rm --recursive --force /"))
 check("rm -Rf /", blocked("rm -Rf /"))
 check("rm -rf / blocked in warn", blocked("rm -rf /", "warn"))
 # safe: only -r or only -f
-check("rm -r /tmp safe (no -f)", not blocked("rm -r /tmp"))
+check("rm -r /tmp BLOCKED (recursive, no -f needed)", blocked("rm -r /tmp"))
 check("rm -f file.txt safe", not blocked("rm -f file.txt"))
 check("rm -rf / rule_id correct", "rm-recursive-force" in rule_ids("rm -rf /"))
 
@@ -419,6 +419,32 @@ check("npm --force warn: message=''", r_warn["message"] == "")
 r_warn2 = evaluate("sudo ls", "warn")
 check("sudo warn: not blocked", r_warn2["blocked"] is False)
 check("sudo warn: has hits (sudo-escalation logged)", len(r_warn2["hits"]) > 0)
+
+# ---------------------------------------------------------------------------
+# Live-red-team hardening: rm -r bypass + execute_code/process coverage
+# ---------------------------------------------------------------------------
+print("=== red-team: recursive rm without -f (the live bypass) ===")
+check("rm -r blocked", blocked("rm -r /tmp/x"))
+check("rm -R blocked", blocked("rm -R /tmp/x"))
+check("rm --recursive blocked", blocked("rm --recursive /tmp/x"))
+check("rm -r blocked in warn (data-loss)", blocked("rm -r /tmp/x", "warn"))
+check("rm -i NOT blocked (not recursive)", not blocked("rm -i file"))
+check("rm file NOT blocked", not blocked("rm file.txt"))
+
+print("=== code-only safety net (is_code=True) for execute_code/process ===")
+def code_blocked(payload, mode="strict"):
+    return evaluate(payload, mode, is_code=True)["blocked"]
+check("os.system rm -rf blocked (code)", code_blocked('os.system("rm -rf /x")'))
+check("shutil.rmtree blocked (code)", code_blocked('import shutil; shutil.rmtree("/x")'))
+check("os.removedirs blocked (code)", code_blocked('os.removedirs("/x")'))
+check("subprocess rm -r blocked (code)", code_blocked('subprocess.run(["sh","-c","rm -r /x"])'))
+check("mkfs in code blocked", code_blocked('os.system("mkfs.ext4 /dev/sdb")'))
+check("safe python NOT blocked (code)", not code_blocked('print(sum(range(10)))'))
+check("reading a json NOT blocked (code)", not code_blocked('import json; json.load(open("d.json"))'))
+
+print("=== code net must NOT leak into terminal (no false positives) ===")
+check("git commit msg 'rm -rf' allowed on terminal", not blocked("git commit -m 'rm -rf in message'"))
+check("echo 'shutil.rmtree' allowed on terminal", not blocked("echo 'shutil.rmtree(x)'"))
 
 # ---------------------------------------------------------------------------
 # Summary

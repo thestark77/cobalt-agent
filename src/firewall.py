@@ -348,29 +348,53 @@ def _tokens(command: str) -> list[str]:
 
 
 def _rule_rm_recursive_force(command: str) -> Optional[Hit]:
-    """rm -rf in any form: -rf, -r -f, -fr, -Rf, --recursive --force, etc."""
+    """Recursive rm in any form (-r, -R, -rf, -fr, --recursive, ...), WITH OR
+    WITHOUT -f. Recursive deletion is irreversible regardless of the force flag —
+    `rm -r dir` alone still wipes a whole tree. (A live red-team test showed an
+    agent bypassing an -rf-only rule by re-running as `rm -r`.)"""
     toks = _tokens(command)
     if not toks or toks[0] != "rm":
         return None
     recursive = False
-    force = False
     for t in toks[1:]:
         if t in ("--recursive", "-r", "-R"):
             recursive = True
-        elif t in ("--force", "-f"):
-            force = True
         elif t.startswith("-") and not t.startswith("--"):
-            for ch in t[1:]:
-                if ch in ("r", "R"):
-                    recursive = True
-                if ch == "f":
-                    force = True
-    if recursive and force:
+            if "r" in t or "R" in t:
+                recursive = True
+    if recursive:
         return Hit(
             rule_id="rm-recursive-force",
             reversibility="data-loss",
             excerpt=command[:80],
-            reason="`rm` with both recursive and force flags. This is irreversible.",
+            reason="`rm` with a recursive flag (-r/-R/--recursive) deletes a directory tree. Irreversible, with or without -f.",
+        )
+    return None
+
+
+# Full-string safety net for catastrophic patterns that the token-based rules
+# miss when they appear INSIDE code (execute_code) or wrapped/quoted strings —
+# e.g. os.system("rm -rf /"), shutil.rmtree(...), subprocess shell strings.
+_CODE_DESTRUCTIVE_RE = re.compile(
+    r"shutil\.rmtree|os\.removedirs|os\.rmdir\b|pathlib[^\n]*\.rmdir|"
+    r"\brm\s+(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b|"
+    r"\bmkfs(?:\.\w+)?\b|\bwipefs\b|\bshred\b|"
+    r"of=/dev/(?:sd|nvme|hd|disk|loop|xvd|vd|mapper/)"
+)
+
+
+def _rule_code_destructive(command: str) -> Optional[Hit]:
+    """Regex safety net over the full string for catastrophic/irreversible
+    patterns embedded in code or quoted payloads (where _tokens() can't see the
+    real command word): recursive rm, shutil.rmtree/os.removedirs, mkfs/wipefs/
+    shred, dd to a block device. Used especially for the execute_code/process
+    tools whose payload is arbitrary code, not a bare shell command."""
+    if _CODE_DESTRUCTIVE_RE.search(command):
+        return Hit(
+            rule_id="code-destructive",
+            reversibility="data-loss",
+            excerpt=command[:80],
+            reason="Irreversible pattern (recursive delete / shutil.rmtree / mkfs / dd-to-device) detected in command or code payload.",
         )
     return None
 
@@ -771,9 +795,16 @@ def _extract_shell_c_bodies(command: str) -> list[str]:
     return [m.group(2) for m in _SHELL_C_RE.finditer(command)]
 
 
-def inspect_command(command: str) -> InspectResult:
+def inspect_command(command: str, is_code: bool = False) -> InspectResult:
     """Run all rules against the full string, each tokenised sub-command,
     and each substitution body. Returns decision=allow|block + hits list.
+
+    is_code=True ALSO runs the _rule_code_destructive regex safety net over the
+    full string. That net is code-only because it matches dangerous substrings
+    (e.g. `rm -rf`, shutil.rmtree) regardless of quoting — correct for an
+    execute_code/process payload, but a false-positive source for a plain shell
+    command like `git commit -m "rm -rf in the message"`, where the token rules
+    (which strip quotes) are authoritative instead.
 
     Mirrors inspectBashCommand from inspect.ts, plus two hardening passes over
     the source: `<shell> -c` body extraction (L3) and one extra level of nested
@@ -816,6 +847,12 @@ def inspect_command(command: str) -> InspectResult:
                 if hit:
                     add_hit(hit)
 
+    # Code-only regex safety net (execute_code / process payloads).
+    if is_code:
+        code_hit = _rule_code_destructive(command)
+        if code_hit:
+            add_hit(code_hit)
+
     decision = "block" if hits else "allow"
     return InspectResult(decision=decision, hits=hits)
 
@@ -825,14 +862,16 @@ def inspect_command(command: str) -> InspectResult:
 # ---------------------------------------------------------------------------
 
 
-def evaluate(command: str, mode: str = "strict") -> dict:
-    """Evaluate a shell command against the firewall rules.
+def evaluate(command: str, mode: str = "strict", is_code: bool = False) -> dict:
+    """Evaluate a shell command (or code payload) against the firewall rules.
 
     Args:
-        command: The shell command string to evaluate.
+        command: The shell command or code string to evaluate.
         mode:    'strict' — block on any hit.
                  'warn'   — block only on hits in IRREVERSIBLE_CLASSES.
                  'off'    — never block.
+        is_code: True for execute_code/process payloads — enables the code-only
+                 destructive-pattern safety net (see inspect_command).
 
     Returns a dict:
         {
@@ -852,7 +891,7 @@ def evaluate(command: str, mode: str = "strict") -> dict:
         return {"blocked": False, "mode": "off", "hits": [], "message": ""}
 
     try:
-        result = inspect_command(command)
+        result = inspect_command(command, is_code=is_code)
     except Exception as exc:
         logger.warning("cobalt-firewall: inspection error (fail-open): %s", exc)
         return {

@@ -190,29 +190,38 @@ def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
     """
     task_id = kwargs.get("task_id", "")
 
-    # --- Firewall check (terminal commands only) ---
-    # Tool name is "terminal"; command is passed as args["command"].
-    # Evidence: ~/.hermes/hermes-agent/tools/terminal_tool.py lines 2283, 2288-2329.
-    if tool_name == "terminal":
+    # --- Firewall check (command/code-bearing tools) ---
+    # Inspect every tool that can run a shell command or arbitrary code, not just
+    # `terminal`: a live red-team test showed an agent that, once `rm -rf` was
+    # blocked on terminal, could fall back to `rm -r` or to execute_code. Map each
+    # such tool to the arg key that carries its payload.
+    #   terminal      -> args["command"]   (terminal_tool.py)
+    #   execute_code  -> args["code"]       (code_execution_tool.py)
+    #   process       -> args["command"]    (process_registry.py)
+    _FW_TOOLS = {"terminal": "command", "execute_code": "code", "process": "command"}
+    if tool_name in _FW_TOOLS:
         try:
             from firewall import evaluate
             from firewall_tool import load_firewall_config
             fw_enabled, fw_mode = load_firewall_config()
             if fw_enabled:
-                # Defensively extract the command from multiple possible shapes
-                command = None
+                key = _FW_TOOLS[tool_name]
+                # Defensively extract the payload from multiple possible shapes.
+                payload = None
                 if isinstance(args, dict):
-                    command = args.get("command")
-                    if command is None:
-                        # Nested shape guard: some backends wrap input
+                    payload = args.get(key)
+                    if payload is None:
                         tool_input = args.get("tool_input") or args.get("input") or {}
                         if isinstance(tool_input, dict):
-                            command = tool_input.get("command")
-                if command and isinstance(command, str):
-                    result = evaluate(command, fw_mode)
+                            payload = tool_input.get(key)
+                if payload and isinstance(payload, str):
+                    # execute_code/process carry arbitrary code → enable the
+                    # code-only destructive-pattern safety net.
+                    result = evaluate(payload, fw_mode, is_code=(tool_name != "terminal"))
                     if result.get("blocked"):
                         logger.warning(
-                            "cobalt-firewall: BLOCKED terminal command (mode=%s, rules=%s)",
+                            "cobalt-firewall: BLOCKED %s (mode=%s, rules=%s)",
+                            tool_name,
                             fw_mode,
                             [h["rule_id"] for h in result.get("hits", [])],
                         )
@@ -223,7 +232,8 @@ def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
                     elif result.get("hits"):
                         # warn mode: non-irreversible hits — log and allow
                         logger.warning(
-                            "cobalt-firewall: WARN terminal command allowed but hit rules: %s",
+                            "cobalt-firewall: WARN %s allowed but hit rules: %s",
+                            tool_name,
                             [h["rule_id"] for h in result["hits"]],
                         )
         except Exception as exc:
