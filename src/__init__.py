@@ -258,7 +258,7 @@ def _pre_llm_call_hook(
     conversation_history: list = None,
     **kwargs,
 ):
-    """Composite pre_llm_call hook: SDD triage + Engram memory + markitdown.
+    """Composite pre_llm_call hook: SDD triage + Engram memory + markitdown + iris.
 
     Sub-agents receive nothing (their context comes from the goal suffix).
     Orchestrator receives all blocks concatenated, every turn.
@@ -273,6 +273,7 @@ def _pre_llm_call_hook(
     triage_hook = None
     build_memory_protocol_block = None
     build_markitdown_protocol_block = None
+    build_iris_protocol_block = None
     build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
@@ -291,6 +292,10 @@ def _pre_llm_call_hook(
     except ImportError as exc:
         logger.warning("cobalt-routing: markitdown_protocol import failed (%s)", exc)
     try:
+        from iris_protocol import build_iris_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: iris_protocol import failed (%s)", exc)
+    try:
         from context_loader import build_context_block
     except ImportError as exc:
         logger.warning("cobalt-routing: context_loader import failed (%s)", exc)
@@ -306,6 +311,7 @@ def _pre_llm_call_hook(
         )
     memory = build_memory_protocol_block(task_id=task_id) if build_memory_protocol_block else None
     markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
+    iris = build_iris_protocol_block(task_id=task_id) if build_iris_protocol_block else None
     session_id = kwargs.get("session_id", "")
     project_context = (
         build_context_block(task_id=task_id, session_id=session_id)
@@ -315,7 +321,7 @@ def _pre_llm_call_hook(
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (project_context, triage_ctx, memory, markdown) if p]
+    parts = [p for p in (project_context, triage_ctx, memory, markdown, iris) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}

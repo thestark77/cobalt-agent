@@ -637,6 +637,7 @@ PLUGIN_FILES=(
     "sdd_triage.py"
     "memory_protocol.py"
     "markitdown_protocol.py"
+    "iris_protocol.py"
     "context_loader.py"
     "version_manager.py"
     "compat.py"
@@ -785,12 +786,13 @@ YAML
     log "config.yaml created"
 fi
 
-log "Merging cobalt + engram + markitdown settings into config.yaml (preserving your config)..."
+log "Merging cobalt + engram + markitdown + iris settings into config.yaml (preserving your config)..."
 ENGRAM_ENABLED="$ENGRAM_ENABLED" \
 ENGRAM_SERVER="$ENGRAM_SERVER" \
 ENGRAM_TOKEN="$ENGRAM_TOKEN" \
 ENGRAM_AUTOSYNC="$ENGRAM_AUTOSYNC" \
 MARKITDOWN_BIN="$MARKITDOWN_BIN" \
+IRIS_MCP_ENABLED="${IRIS_MCP_ENABLED:-0}" \
 "$VENV_DIR/bin/python" - << 'PYTHON'
 import os
 import yaml
@@ -854,6 +856,12 @@ if markitdown_bin:
     md = mcp_servers.setdefault("markitdown", {})
     md["command"] = markitdown_bin
     md["args"] = []
+
+# Iris brain MCP server wiring (opt-in: only when IRIS_MCP_ENABLED=1)
+if os.environ.get("IRIS_MCP_ENABLED") == "1":
+    iris = mcp_servers.setdefault("iris", {})
+    iris.setdefault("command", "iris")
+    iris.setdefault("args", ["mcp"])
 
 # Drop the mcp_servers section if it ended up empty so we don't leave a
 # dangling key in user configs that never had MCP wiring.
