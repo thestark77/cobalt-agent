@@ -945,6 +945,18 @@ SKILLS=(
     "skills-sh/alchaincyf/huashu-design"
     "skills-sh/nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max"
     "skills-sh/Leonxlnx/taste-skill/gpt-tasteskill"
+    # v0.9.0 additions — Pocock engineering + productivity skills
+    "skills-sh/mattpocock/skills/skills/engineering/grill-with-docs"
+    "skills-sh/mattpocock/skills/skills/engineering/diagnose"
+    "skills-sh/mattpocock/skills/skills/engineering/zoom-out"
+    "skills-sh/mattpocock/skills/skills/engineering/prototype"
+    "skills-sh/mattpocock/skills/skills/engineering/improve-codebase-architecture"
+    "skills-sh/mattpocock/skills/skills/engineering/to-prd"
+    "skills-sh/mattpocock/skills/skills/engineering/to-issues"
+    "skills-sh/mattpocock/skills/skills/productivity/handoff"
+    "skills-sh/mattpocock/skills/skills/productivity/write-a-skill"
+    "skills-sh/mattpocock/skills/skills/productivity/caveman"
+    "skills-sh/mattpocock/skills/skills/productivity/grill-me"
 )
 
 SKILL_NAMES=(
@@ -964,6 +976,18 @@ SKILL_NAMES=(
     "huashu-design"
     "ui-ux-pro-max"
     "gpt-tasteskill"
+    # v0.9.0 additions — Pocock skills
+    "grill-with-docs"
+    "diagnose"
+    "zoom-out"
+    "prototype"
+    "improve-codebase-architecture"
+    "to-prd"
+    "to-issues"
+    "handoff"
+    "write-a-skill"
+    "caveman"
+    "grill-me"
 )
 
 log "Installing ${#SKILLS[@]} skills..."
@@ -1096,6 +1120,50 @@ if [ "${#SKILLS_FAILED[@]}" -gt 0 ]; then
     warn "Re-run installer once upstream sources are reachable; only the missing skills will be retried."
 else
     log "$SKILLS_INSTALLED/${#SKILLS[@]} skills installed"
+fi
+
+# ============================================================================
+# Bundled design skills — copied from the repo's skills/ directory.
+# These are not on skills.sh; they ship with cobalt-agent directly.
+# Install is idempotent: skip if already present (unless IS_UPDATE).
+# A .cobalt-managed marker is written so uninstall knows what we own.
+# ============================================================================
+
+BUNDLED_SKILLS_SRC="$COBALT_TMP/skills"
+BUNDLED_INSTALLED=0
+
+if [ -d "$BUNDLED_SKILLS_SRC" ]; then
+    for bundled_dir in "$BUNDLED_SKILLS_SRC"/*/; do
+        [ -d "$bundled_dir" ] || continue
+        bname="$(basename "$bundled_dir")"
+        bdest="$SKILLS_DIR/$bname"
+
+        if [ -d "$bdest" ] && [ "$IS_UPDATE" -eq 0 ]; then
+            log "  $bname (already installed)"
+            BUNDLED_INSTALLED=$((BUNDLED_INSTALLED + 1))
+            continue
+        fi
+
+        mkdir -p "$bdest"
+        cp -r "$bundled_dir". "$bdest"/
+        # Write a manifest marker so uninstall knows this skill is cobalt-managed.
+        printf "cobalt-agent/%s\n" "$COBALT_VERSION" > "$bdest/.cobalt-managed"
+
+        if [ -f "$bdest/SKILL.md" ]; then
+            if [ "$IS_UPDATE" -eq 1 ]; then
+                log "  $bname (updated)"
+            else
+                log "  $bname (installed)"
+            fi
+            BUNDLED_INSTALLED=$((BUNDLED_INSTALLED + 1))
+        else
+            warn "  $bname (install failed — SKILL.md not found after copy)"
+        fi
+    done
+
+    log "$BUNDLED_INSTALLED bundled design skill(s) installed"
+else
+    log "No bundled skills directory found — skipping"
 fi
 
 # ============================================================================
