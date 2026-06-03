@@ -179,13 +179,56 @@ def _inject_routing(task_dict: dict, task_type: str) -> None:
 
 
 def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
-    """Unified pre_tool_call hook: guard + routing + timeout.
+    """Unified pre_tool_call hook: firewall + guard + routing + timeout.
 
-    1. GUARD: If orchestrator tries a forbidden tool, return block directive.
-    2. ROUTING: If delegate_task, inject _routed_model based on task_type.
-    3. TIMEOUT: Set per-task timeout via env var.
+    1. FIREWALL: If the terminal tool is called, inspect the command against
+       the irreversibility firewall rules. Blocks or warns depending on mode.
+       Fail-open: any exception in firewall logic allows the command through.
+    2. GUARD: If orchestrator tries a forbidden tool, return block directive.
+    3. ROUTING: If delegate_task, inject _routed_model based on task_type.
+    4. TIMEOUT: Set per-task timeout via env var.
     """
     task_id = kwargs.get("task_id", "")
+
+    # --- Firewall check (terminal commands only) ---
+    # Tool name is "terminal"; command is passed as args["command"].
+    # Evidence: ~/.hermes/hermes-agent/tools/terminal_tool.py lines 2283, 2288-2329.
+    if tool_name == "terminal":
+        try:
+            from firewall import evaluate
+            from firewall_tool import load_firewall_config
+            fw_enabled, fw_mode = load_firewall_config()
+            if fw_enabled:
+                # Defensively extract the command from multiple possible shapes
+                command = None
+                if isinstance(args, dict):
+                    command = args.get("command")
+                    if command is None:
+                        # Nested shape guard: some backends wrap input
+                        tool_input = args.get("tool_input") or args.get("input") or {}
+                        if isinstance(tool_input, dict):
+                            command = tool_input.get("command")
+                if command and isinstance(command, str):
+                    result = evaluate(command, fw_mode)
+                    if result.get("blocked"):
+                        logger.warning(
+                            "cobalt-firewall: BLOCKED terminal command (mode=%s, rules=%s)",
+                            fw_mode,
+                            [h["rule_id"] for h in result.get("hits", [])],
+                        )
+                        return {
+                            "action": "block",
+                            "message": result["message"],
+                        }
+                    elif result.get("hits"):
+                        # warn mode: non-irreversible hits — log and allow
+                        logger.warning(
+                            "cobalt-firewall: WARN terminal command allowed but hit rules: %s",
+                            [h["rule_id"] for h in result["hits"]],
+                        )
+        except Exception as exc:
+            # Fail-open: firewall errors must never break normal operations
+            logger.debug("cobalt-firewall: exception (fail-open): %s", exc)
 
     from tool_guard import check_tool_allowed
     block = check_tool_allowed(tool_name, task_id)
@@ -337,6 +380,11 @@ def register(ctx):
     from compat import check_version, verify_patch_applied
     from router import load_presets
     from preset_tool import TOOL_NAME, TOOL_SCHEMA, handle_preset
+    from firewall_tool import (
+        TOOL_NAME as FW_TOOL_NAME,
+        TOOL_SCHEMA as FW_TOOL_SCHEMA,
+        handle_firewall,
+    )
 
     status = check_version()
     if status == "error":
@@ -368,6 +416,18 @@ def register(ctx):
         emoji="⚡",
     )
 
+    try:
+        ctx.register_tool(
+            name=FW_TOOL_NAME,
+            toolset="cobalt",
+            schema=FW_TOOL_SCHEMA,
+            handler=handle_firewall,
+            description="Manage cobalt irreversibility firewall (status, set, enable, disable)",
+            emoji="🛡",
+        )
+    except Exception as exc:
+        logger.warning("cobalt-firewall: tool registration failed (continuing): %s", exc)
+
     ctx.register_hook("pre_tool_call", _pre_tool_call_hook)
     ctx.register_hook("pre_llm_call", _pre_llm_call_hook)
 
@@ -375,10 +435,17 @@ def register(ctx):
         logger.info("cobalt-routing: schema patch deferred to first delegate_task call")
 
     from tool_guard import _guard_enabled, ORCHESTRATOR_ALLOWED
+    try:
+        from firewall_tool import load_firewall_config as _fw_cfg
+        _fw_on, _fw_mode = _fw_cfg()
+        _fw_status = f"{_fw_mode}" if _fw_on else "OFF"
+    except Exception:
+        _fw_status = "?"
     logger.info(
-        "cobalt-routing v%s loaded (patch=%s, guard=%s, skills=ON, timeout=DYNAMIC, allowed=%d tools)",
+        "cobalt-routing v%s loaded (patch=%s, guard=%s, firewall=%s, skills=ON, timeout=DYNAMIC, allowed=%d tools)",
         PLUGIN_VERSION,
         "OK" if patch_ok else "MISSING",
         "ON" if _guard_enabled else "OFF",
+        _fw_status,
         len(ORCHESTRATOR_ALLOWED),
     )

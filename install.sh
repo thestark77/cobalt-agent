@@ -638,6 +638,8 @@ PLUGIN_FILES=(
     "memory_protocol.py"
     "markitdown_protocol.py"
     "iris_protocol.py"
+    "firewall.py"
+    "firewall_tool.py"
     "context_loader.py"
     "version_manager.py"
     "compat.py"
@@ -867,6 +869,11 @@ if os.environ.get("IRIS_MCP_ENABLED") == "1":
 # dangling key in user configs that never had MCP wiring.
 if not mcp_servers:
     config.pop("mcp_servers", None)
+
+# Firewall defaults — only written when the key is absent (no clobber).
+# Preserves any user-set mode across re-installs.
+if "cobalt_firewall" not in config:
+    config["cobalt_firewall"] = {"enabled": True, "mode": "strict"}
 
 config_path.write_text(
     yaml.dump(config, default_flow_style=False, allow_unicode=True, sort_keys=False),

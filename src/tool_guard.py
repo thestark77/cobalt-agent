@@ -20,6 +20,7 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # persistent memory must flow through Engram via the `mcp_engram_mem_*`
     # tools listed below, which sync to Engram Cloud automatically.
     "cobalt_preset",
+    "cobalt_firewall",
     "clarify",
     "todo",
     "skills_list",
