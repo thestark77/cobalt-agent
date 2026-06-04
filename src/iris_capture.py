@@ -41,12 +41,12 @@ except Exception:  # pragma: no cover - defensive (partial install)
 
 _IRIS_ENV = Path.home() / "iris-ai" / ".env"
 _DEFAULT_ENGRAM = "http://127.0.0.1:7437"
-# Mirror iris-ai's own resolution (src/brain/config): same env var
-# (OPENAI_BASE_URL) and the SAME default (OpenAI direct, not OpenRouter), so
-# capture targets exactly the provider iris already authenticates against with
-# OPENROUTER_API_KEY. Getting this wrong = the extraction call 404s/401s and the
+# Mirror iris-ai's own resolution (src/brain/config): read OPENROUTER_BASE_URL
+# (with OPENAI_BASE_URL accepted as a legacy fallback) and default to OpenRouter,
+# so capture targets exactly the provider iris already authenticates against with
+# OPENROUTER_API_KEY. Getting this wrong = the extraction call 401/404s and the
 # whole capture silently no-ops (nothing saved).
-_DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
+_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 # Chat model id differs by provider: OpenAI direct uses the bare id; OpenRouter
 # namespaces it under the vendor.
 _CAPTURE_MODEL_OPENAI = "gpt-4o-mini"
@@ -175,7 +175,11 @@ def _extract_fact(message: str) -> Optional[dict]:
     key = env.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
     if not key:
         return None
-    base = (env.get("OPENAI_BASE_URL") or _DEFAULT_OPENAI_BASE).rstrip("/")
+    base = (
+        env.get("OPENROUTER_BASE_URL")
+        or env.get("OPENAI_BASE_URL")  # legacy var name; accepted for back-compat
+        or _DEFAULT_BASE_URL
+    ).rstrip("/")
     model = env.get("CAPTURE_MODEL") or _default_capture_model(base)
     known = _known_facts_block()
     user_content = (
