@@ -50,17 +50,34 @@ _MIN_MESSAGE_LEN = 12
 
 _env_cache: Optional[dict] = None
 
+# Controlled topic_key vocabulary: keeps memory clustered + dedupable at scale.
+_ALLOWED_CATEGORIES = {
+    "work",
+    "family",
+    "relationships",
+    "health",
+    "location",
+    "preferences",
+    "decisions",
+}
+
 _EXTRACT_SYSTEM = (
-    "You extract DURABLE facts about the user worth remembering long-term for a "
-    "personal assistant. DURABLE = employer/company, job/role, family, "
-    "relationships, health, location, strong stable preferences, explicit "
-    "decisions or commitments. NOT durable = greetings, smalltalk, transient "
-    "task requests, questions, anything ephemeral. "
-    "Given the user's message, reply with ONE JSON object and nothing else. "
-    'If there IS a durable fact: {"durable": true, "title": "<=80 char summary", '
-    '"content": "the fact in 1-2 sentences, third person about the user", '
-    '"type": "profile|preference|decision", "topic_key": "profile/<short-slug>"}. '
-    'If there is NOT: {"durable": false}.'
+    "You capture DURABLE PROFILE facts about the user for a personal assistant's "
+    "long-term memory. Extract ONLY stable facts about WHO THE USER IS: "
+    "employer/company, job/role, family, relationships, health, location/where "
+    "they live, strong lasting preferences, and major life decisions or "
+    "commitments. "
+    "Do NOT capture: project status or progress, code/technical/work-task "
+    "details, day-to-day activity, questions, requests, opinions about external "
+    "things, or anything transient that changes week to week. "
+    "Reply with ONE JSON object and nothing else. "
+    'If there IS a durable profile fact: {"durable": true, '
+    '"category": "work|family|relationships|health|location|preferences|decisions", '
+    '"title": "<=70 char summary", '
+    '"content": "the fact in ONE concise sentence, third person about the user"}. '
+    'If there is NOT: {"durable": false}. '
+    "Be conservative: when unsure, return durable:false. At most one fact per "
+    "message — pick the single most important durable fact."
 )
 
 
@@ -179,11 +196,16 @@ def _fact_from_content(content: str) -> Optional[dict]:
     fact_content = (parsed.get("content") or "").strip()
     if not title or not fact_content:
         return None
+    # Map the model's category onto a fixed topic_key vocabulary so facts about
+    # the same dimension cluster on one key and Engram can dedupe them.
+    category = (parsed.get("category") or "").strip().lower()
+    if category not in _ALLOWED_CATEGORIES:
+        category = "other"
     return {
         "title": title[:120],
         "content": fact_content,
-        "type": parsed.get("type") or "profile",
-        "topic_key": (parsed.get("topic_key") or "").strip(),
+        "type": "profile",
+        "topic_key": f"profile/{category}",
     }
 
 

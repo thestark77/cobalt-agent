@@ -93,22 +93,23 @@ print("=== _fact_from_content ===")
 check("durable:false -> None", ic._fact_from_content('{"durable": false}') is None)
 check("missing -> None", ic._fact_from_content("nonsense") is None)
 f = ic._fact_from_content(
-    '{"durable": true, "title": "Empleo en Bemovil", '
-    '"content": "El usuario trabaja en Bemovil.", "type": "profile", '
-    '"topic_key": "profile/work"}'
+    '{"durable": true, "category": "work", "title": "Empleo en Bemovil", '
+    '"content": "El usuario trabaja en Bemovil."}'
 )
 check("durable fact returns dict", isinstance(f, dict))
 check("fact title", f and f["title"] == "Empleo en Bemovil")
 check("fact content", f and "Bemovil" in f["content"])
-check("fact type", f and f["type"] == "profile")
-check("fact topic_key", f and f["topic_key"] == "profile/work")
+check("fact type is profile", f and f["type"] == "profile")
+check("category -> topic_key from fixed vocab", f and f["topic_key"] == "profile/work")
 check(
     "durable but empty content -> None",
-    ic._fact_from_content('{"durable": true, "title": "x", "content": ""}') is None,
+    ic._fact_from_content('{"durable": true, "category": "work", "title": "x", "content": ""}') is None,
 )
-# type defaults to profile when absent
+# unknown/absent category falls back to profile/other (no free-form slugs)
 f2 = ic._fact_from_content('{"durable": true, "title": "T", "content": "C"}')
-check("type defaults to profile", f2 and f2["type"] == "profile")
+check("absent category -> profile/other", f2 and f2["topic_key"] == "profile/other")
+f3 = ic._fact_from_content('{"durable": true, "category": "random-thing", "title": "T", "content": "C"}')
+check("invalid category -> profile/other", f3 and f3["topic_key"] == "profile/other")
 
 # ---------------------------------------------------------------------------
 # Extraction fail-open: no key -> None
