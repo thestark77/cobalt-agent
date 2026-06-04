@@ -15,8 +15,8 @@ Decoupling guarantees (cobalt-agent must work WITHOUT iris):
   - Fail-open: every error is swallowed; the turn and Cobalt are never affected.
   - Runs in a daemon thread — never blocks the user-facing response.
 
-Flow per turn: cheap LLM extraction ("is there a durable user fact here?") ->
-if yes, write it to Engram. The extraction credential is OPENROUTER_API_KEY
+Flow per turn: cheap LLM extraction ("which durable profile facts are in this
+message?", 0..N) -> write each to Engram. The extraction credential is OPENROUTER_API_KEY
 read from ~/iris-ai/.env, which only exists when iris is installed (consistent
 with the gate).
 """
@@ -47,41 +47,53 @@ _DEFAULT_ENGRAM = "http://127.0.0.1:7437"
 # OPENROUTER_API_KEY. Getting this wrong = the extraction call 401/404s and the
 # whole capture silently no-ops (nothing saved).
 _DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-# Chat model id differs by provider: OpenAI direct uses the bare id; OpenRouter
-# namespaces it under the vendor.
-_CAPTURE_MODEL_OPENAI = "gpt-4o-mini"
-_CAPTURE_MODEL_OPENROUTER = "openai/gpt-4o-mini"
+# Extraction model on OpenRouter. Override via CAPTURE_MODEL in ~/iris-ai/.env.
+_DEFAULT_CAPTURE_MODEL = "deepseek/deepseek-v4-flash"
 _CAPTURE_SESSION = "iris-capture"
 _CAPTURE_PROJECT = "sebas"  # personal/profile facts live here
-_HTTP_TIMEOUT = 12
+_HTTP_TIMEOUT = 20
 _MIN_MESSAGE_LEN = 12
 
 _env_cache: Optional[dict] = None
 
-_MAX_KNOWN_FACTS = 60  # bound the prompt; profile facts don't grow unbounded fast.
+_MAX_KNOWN_FACTS = 80  # bound the prompt; profile facts don't grow unbounded fast.
+# Safety fuse, NOT a semantic cap: the criterion decides how many facts a message
+# yields; this only stops a pathological model reply from writing dozens of rows.
+_MAX_FACTS_PER_MESSAGE = 10
 
 _EXTRACT_SYSTEM = (
     "You maintain a personal assistant's long-term memory of DURABLE PROFILE facts "
-    "about the user: employer/company, job/role, family, relationships, health, "
-    "location, strong lasting preferences, and major life decisions. "
-    "You are given the facts ALREADY KNOWN (as 'topic_key: fact') and the user's "
-    "NEW message. Decide whether the new message contains a durable profile fact, "
-    "following these rules: "
-    "(1) If it is ALREADY known and unchanged -> reply {\"durable\": false}. "
-    "(2) If it UPDATES or corrects a known fact -> reuse that fact's EXACT topic_key "
-    "(its content will be overwritten). "
-    "(3) If it is a NEW durable fact -> create a SPECIFIC topic_key "
-    "'profile/<slug>' where the slug is the precise dimension, e.g. "
-    "profile/employer, profile/role, profile/family-sister, profile/location-home, "
-    "profile/decision-move-city. One fact = one specific key (do NOT lump distinct "
-    "facts under one broad key). "
-    "Do NOT capture project status/progress, code or work-task details, day-to-day "
-    "activity, questions, requests, or anything transient. Be conservative: when "
-    "unsure, reply {\"durable\": false}. At most one fact per message. "
-    "Reply with ONE JSON object and nothing else: "
-    '{"durable": true, "topic_key": "profile/<slug>", "title": "<=70 chars", '
-    '"content": "the fact in ONE concise sentence, third person about the user"} '
-    'OR {"durable": false}.'
+    "about the user. A DURABLE PROFILE fact is something that will STILL be true and "
+    "relevant about him in several weeks AND that sharpens the model of who he is and "
+    "what he wants. "
+    "INCLUDE: identity; family, relationships, close people; where he lives and with "
+    "whom; employer, role, ongoing projects or ventures (as lasting facts, not task "
+    "status); health; values and worldview; aspirations and goals (career, personal "
+    "growth, relocation, lifestyle); major decisions AND their motivation/reasoning "
+    "(the WHY, not only the WHAT); strong, lasting preferences. "
+    "EXCLUDE: task or project status, code, work-in-progress, to-dos; questions or "
+    "requests to the assistant; ephemeral states (today's mood, what he is doing right "
+    "now) unless they reveal a stable pattern; anything that would be stale in a few "
+    "weeks; and facts already known and unchanged. "
+    "You are given the facts ALREADY KNOWN (as 'topic_key: fact') and the user's NEW "
+    "message, which may be long and contain SEVERAL durable facts, one, or none. "
+    "RULES: "
+    "(1) Extract EVERY durable profile fact present. There is NO fixed number: a long "
+    "message may yield several; a message with nothing durable yields []. "
+    "(2) One fact = one specific dimension. Use a SPECIFIC topic_key 'profile/<slug>' "
+    "(e.g. profile/employer, profile/role, profile/location-home, "
+    "profile/aspiration-growth, profile/decision-move-city). Do NOT lump distinct facts "
+    "under one key, and do NOT split one fact into near-duplicates. "
+    "(3) If a fact UPDATES or corrects something already known, reuse that fact's EXACT "
+    "topic_key (its content will be overwritten). If it is already known and unchanged, "
+    "OMIT it. "
+    "(4) Be conservative: when unsure whether something is durable, OMIT it. Quality "
+    "over quantity. Never return more than 10 facts; if the message has more, keep only "
+    "the most important. "
+    "Reply with ONLY a JSON array and nothing else, each element: "
+    '{"topic_key": "profile/<slug>", "title": "<=70 chars", '
+    '"content": "the fact in ONE concise sentence, third person about the user"}. '
+    "Return [] if there is nothing durable to save."
 )
 
 
@@ -126,8 +138,7 @@ def maybe_capture(
 
 def _capture_worker(message: str) -> None:
     try:
-        fact = _extract_fact(message)
-        if fact is not None:
+        for fact in _extract_facts(message):
             _write_to_engram(fact)
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("iris_capture worker failed: %s", exc)
@@ -160,27 +171,19 @@ def _load_env() -> dict:
 # Extraction (cheap LLM call)
 # ---------------------------------------------------------------------------
 
-def _default_capture_model(base: str) -> str:
-    """Pick a chat-model id that matches the resolved provider.
-
-    OpenRouter namespaces OpenAI models as ``openai/gpt-4o-mini``; OpenAI direct
-    wants the bare ``gpt-4o-mini``. Using the wrong one 404s the request and the
-    capture silently drops the fact, so derive it from the base URL.
-    """
-    return _CAPTURE_MODEL_OPENROUTER if "openrouter" in base.lower() else _CAPTURE_MODEL_OPENAI
-
-
-def _extract_fact(message: str) -> Optional[dict]:
+def _extract_facts(message: str) -> list:
+    """Extract 0..N durable profile facts from one user message. Never raises here
+    is NOT guaranteed (caller swallows); returns [] when there is no key/nothing."""
     env = _load_env()
     key = env.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
     if not key:
-        return None
+        return []
     base = (
         env.get("OPENROUTER_BASE_URL")
         or env.get("OPENAI_BASE_URL")  # legacy var name; accepted for back-compat
         or _DEFAULT_BASE_URL
     ).rstrip("/")
-    model = env.get("CAPTURE_MODEL") or _default_capture_model(base)
+    model = env.get("CAPTURE_MODEL") or _DEFAULT_CAPTURE_MODEL
     known = _known_facts_block()
     user_content = (
         f"Already known facts:\n{known}\n\nNew message from the user:\n{message}"
@@ -191,7 +194,7 @@ def _extract_fact(message: str) -> Optional[dict]:
         {
             "model": model,
             "temperature": 0,
-            "max_tokens": 220,
+            "max_tokens": 900,
             "messages": [
                 {"role": "system", "content": _EXTRACT_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -209,22 +212,47 @@ def _extract_fact(message: str) -> Optional[dict]:
     content = (
         (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
     )
-    return _fact_from_content(content)
+    return _facts_from_content(content)
 
 
-def _fact_from_content(content: str) -> Optional[dict]:
-    parsed = _parse_json_object(content)
-    if not parsed or not parsed.get("durable"):
+def _facts_from_content(content: str) -> list:
+    """Parse the model reply into a list of validated fact dicts. Never raises.
+
+    Accepts a JSON array (the contract), a single object, or the legacy
+    {"durable": false}. Bounded by _MAX_FACTS_PER_MESSAGE (a safety fuse, not a
+    semantic cap — the prompt's criterion decides how many facts are real)."""
+    parsed = _parse_json_payload(content)
+    if parsed is None:
+        return []
+    if isinstance(parsed, dict):
+        if parsed.get("durable") is False:  # legacy single-object "nothing" reply
+            return []
+        parsed = [parsed]
+    if not isinstance(parsed, list):
+        return []
+    facts = []
+    for item in parsed:
+        fact = _normalize_fact(item)
+        if fact is not None:
+            facts.append(fact)
+        if len(facts) >= _MAX_FACTS_PER_MESSAGE:
+            break
+    return facts
+
+
+def _normalize_fact(item) -> Optional[dict]:
+    """Validate and shape one fact element. Returns None when unusable."""
+    if not isinstance(item, dict):
         return None
-    title = (parsed.get("title") or "").strip()
-    fact_content = (parsed.get("content") or "").strip()
+    title = (item.get("title") or "").strip()
+    fact_content = (item.get("content") or "").strip()
     if not title or not fact_content:
         return None
     return {
         "title": title[:120],
         "content": fact_content,
         "type": "profile",
-        "topic_key": _normalize_topic_key(parsed.get("topic_key")),
+        "topic_key": _normalize_topic_key(item.get("topic_key")),
     }
 
 
@@ -272,16 +300,28 @@ def _known_facts_block() -> str:
         return ""
 
 
-def _parse_json_object(text: str) -> Optional[dict]:
-    """Extract the first {...} JSON object from a model reply. Never raises."""
+def _parse_json_payload(text: str):
+    """Extract the first JSON array or object from a model reply. Never raises.
+
+    Prefers an array (the contract) when present; falls back to a bare object.
+    Returns a list, a dict, or None.
+    """
     text = (text or "").strip()
-    try:
-        start = text.index("{")
-        end = text.rindex("}") + 1
-        obj = json.loads(text[start:end])
-        return obj if isinstance(obj, dict) else None
-    except Exception:
-        return None
+    candidates = []
+    for open_ch, close_ch in (("[", "]"), ("{", "}")):
+        start = text.find(open_ch)
+        end = text.rfind(close_ch)
+        if start != -1 and end > start:
+            candidates.append((start, text[start:end + 1]))
+    candidates.sort(key=lambda c: c[0])  # earliest opener first (array wins)
+    for _, snippet in candidates:
+        try:
+            value = json.loads(snippet)
+            if isinstance(value, (list, dict)):
+                return value
+        except Exception:
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------

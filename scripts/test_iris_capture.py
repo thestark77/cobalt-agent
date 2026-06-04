@@ -75,62 +75,60 @@ ic._capture_worker = _orig_worker
 # ---------------------------------------------------------------------------
 # JSON parsing robustness
 # ---------------------------------------------------------------------------
-print("=== _parse_json_object ===")
-check("plain object", ic._parse_json_object('{"durable": false}') == {"durable": False})
-check("fenced json", ic._parse_json_object('```json\n{"durable": true}\n```') == {"durable": True})
-check(
-    "surrounding prose",
-    ic._parse_json_object('Sure! {"durable": true, "x": 1} done') == {"durable": True, "x": 1},
-)
-check("garbage -> None", ic._parse_json_object("no json here") is None)
-check("empty -> None", ic._parse_json_object("") is None)
-check("array -> None (only objects)", ic._parse_json_object("[1,2,3]") is None)
+print("=== _parse_json_payload ===")
+check("plain object", ic._parse_json_payload('{"durable": false}') == {"durable": False})
+check("plain array", ic._parse_json_payload('[{"a": 1}, {"b": 2}]') == [{"a": 1}, {"b": 2}])
+check("fenced array", ic._parse_json_payload('```json\n[{"x": 1}]\n```') == [{"x": 1}])
+check("surrounding prose (array)", ic._parse_json_payload('Sure! [{"x": 1}] done') == [{"x": 1}])
+check("empty array", ic._parse_json_payload("[]") == [])
+check("garbage -> None", ic._parse_json_payload("no json here") is None)
+check("empty -> None", ic._parse_json_payload("") is None)
 
 # ---------------------------------------------------------------------------
-# Fact shaping
+# Fact shaping (multi-fact: array -> list of validated facts)
 # ---------------------------------------------------------------------------
-print("=== _fact_from_content ===")
-check("durable:false -> None", ic._fact_from_content('{"durable": false}') is None)
-check("missing -> None", ic._fact_from_content("nonsense") is None)
-f = ic._fact_from_content(
-    '{"durable": true, "topic_key": "profile/employer", "title": "Empleo en Bemovil", '
-    '"content": "El usuario trabaja en Bemovil."}'
+print("=== _facts_from_content ===")
+check("[] -> empty list", ic._facts_from_content("[]") == [])
+check("legacy durable:false -> empty", ic._facts_from_content('{"durable": false}') == [])
+check("garbage -> empty", ic._facts_from_content("nonsense") == [])
+facts = ic._facts_from_content(
+    '[{"topic_key": "profile/employer", "title": "Empleo en Bemovil", "content": "Trabaja en Bemovil."}, '
+    '{"topic_key": "profile/aspiration-growth", "title": "Quiere crecer", '
+    '"content": "Quiere expandirse a una ciudad mas grande, quizas a otro pais."}]'
 )
-check("durable fact returns dict", isinstance(f, dict))
-check("fact title", f and f["title"] == "Empleo en Bemovil")
-check("fact content", f and "Bemovil" in f["content"])
-check("fact type is profile", f and f["type"] == "profile")
-check("specific topic_key preserved", f and f["topic_key"] == "profile/employer")
-check(
-    "durable but empty content -> None",
-    ic._fact_from_content('{"durable": true, "topic_key": "profile/x", "title": "x", "content": ""}') is None,
-)
+check("two facts parsed", len(facts) == 2)
+check("first specific key", facts and facts[0]["topic_key"] == "profile/employer")
+check("second specific key", len(facts) > 1 and facts[1]["topic_key"] == "profile/aspiration-growth")
+check("all type profile", all(f["type"] == "profile" for f in facts))
+check("single object tolerated -> 1 fact",
+      len(ic._facts_from_content('{"topic_key":"profile/role","title":"T","content":"C"}')) == 1)
+check("element with empty content dropped",
+      ic._facts_from_content('[{"topic_key":"profile/x","title":"x","content":""}]') == [])
+_many = "[" + ",".join('{"topic_key":"profile/k%d","title":"t","content":"c"}' % i for i in range(25)) + "]"
+check("safety fuse caps the list", len(ic._facts_from_content(_many)) == ic._MAX_FACTS_PER_MESSAGE)
 
 print("=== _normalize_topic_key ===")
 check("already good preserved", ic._normalize_topic_key("profile/role") == "profile/role")
-check("absent -> profile/misc", ic._fact_from_content('{"durable": true, "title": "T", "content": "C"}')["topic_key"] == "profile/misc")
+check("absent -> profile/misc", ic._normalize_fact({"title": "T", "content": "C"})["topic_key"] == "profile/misc")
 check("empty -> profile/misc", ic._normalize_topic_key("") == "profile/misc")
 check("uppercase+spaces+punct sanitized", ic._normalize_topic_key("profile/Family Sister!") == "profile/family-sister")
 check("non-profile coerced under profile/", ic._normalize_topic_key("employer") == "profile/employer")
 check("hierarchical slug kept", ic._normalize_topic_key("profile/decision/move-city") == "profile/decision/move-city")
 
 # ---------------------------------------------------------------------------
-# Provider-correct model derivation (the silent-no-save bug)
+# Capture model default (DeepSeek V4 Flash on OpenRouter)
 # ---------------------------------------------------------------------------
-print("=== _default_capture_model ===")
-check("OpenAI direct -> bare id", ic._default_capture_model("https://api.openai.com/v1") == "gpt-4o-mini")
-check("OpenRouter -> namespaced id", ic._default_capture_model("https://openrouter.ai/api/v1") == "openai/gpt-4o-mini")
-check("OpenRouter case-insensitive", ic._default_capture_model("https://OpenRouter.ai/API/v1") == "openai/gpt-4o-mini")
-check("unknown gateway -> bare id (OpenAI-compatible default)", ic._default_capture_model("https://llm.internal/v1") == "gpt-4o-mini")
+print("=== capture model default ===")
+check("default model is deepseek v4 flash", ic._DEFAULT_CAPTURE_MODEL == "deepseek/deepseek-v4-flash")
 
 # ---------------------------------------------------------------------------
-# Extraction fail-open: no key -> None
+# Extraction fail-open: no key -> []
 # ---------------------------------------------------------------------------
-print("=== _extract_fact no key ===")
+print("=== _extract_facts no key ===")
 _orig_load = ic._load_env
 ic._load_env = lambda: {}
 os.environ.pop("OPENROUTER_API_KEY", None)
-check("no api key -> None (no network)", ic._extract_fact("Trabajo en Bemovil") is None)
+check("no api key -> [] (no network)", ic._extract_facts("Trabajo en Bemovil") == [])
 ic._load_env = _orig_load
 
 # ---------------------------------------------------------------------------
