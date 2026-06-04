@@ -59,8 +59,12 @@ Classify this request:
    phase name to ensure correct model assignment:
    "Explore whether...", "Apply the fix to...", "Verify that...", "Archive the final state..."
 
-State your classification in ONE line before proceeding.
-Format: "TASK: Explore → Apply → Verify → Archive" or "CONVERSATION: [respond directly]"
+Classify internally. For an EXECUTION TASK, state the plan in ONE line before
+proceeding, e.g. "TASK: Explore → Apply → Verify → Archive" (this line is for
+routing). For CONVERSATION, do NOT print any classification, label, or prefix —
+reply directly and naturally. NEVER emit "CONVERSATION:", "TASK:", or any other
+triage meta-label in a conversational answer; the user must never see triage
+bookkeeping.
 If the scope is unclear or complex, ask the user which phases to apply.
 Bias: apply MORE phases rather than fewer for any non-trivial task.
 
@@ -86,8 +90,10 @@ There is work in progress. Classify this new message:
 3. OVERRIDES the current plan (contradicts or supersedes it) → STOP current execution, replan from scratch.
 4. UNRELATED (question, feedback, or new topic) → ANSWER directly, then RESUME current plan.
 
-State your classification in ONE line, then act accordingly.
-Format: "STEERING: MODIFIES — [what changes]" or "STEERING: EXTENDS — [what's added]" or "STEERING: UNRELATED — [answer]"
+Classify internally and act accordingly. Do NOT print the classification, any
+label, or a meta-prefix in your reply (no "STEERING:", "UNRELATED:", etc.): for an
+UNRELATED message just answer and then resume; for MODIFIES / EXTENDS / OVERRIDES,
+adjust the plan and continue. The user must never see triage bookkeeping.
 """
 
 
