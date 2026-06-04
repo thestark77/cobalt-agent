@@ -93,23 +93,26 @@ print("=== _fact_from_content ===")
 check("durable:false -> None", ic._fact_from_content('{"durable": false}') is None)
 check("missing -> None", ic._fact_from_content("nonsense") is None)
 f = ic._fact_from_content(
-    '{"durable": true, "category": "work", "title": "Empleo en Bemovil", '
+    '{"durable": true, "topic_key": "profile/employer", "title": "Empleo en Bemovil", '
     '"content": "El usuario trabaja en Bemovil."}'
 )
 check("durable fact returns dict", isinstance(f, dict))
 check("fact title", f and f["title"] == "Empleo en Bemovil")
 check("fact content", f and "Bemovil" in f["content"])
 check("fact type is profile", f and f["type"] == "profile")
-check("category -> topic_key from fixed vocab", f and f["topic_key"] == "profile/work")
+check("specific topic_key preserved", f and f["topic_key"] == "profile/employer")
 check(
     "durable but empty content -> None",
-    ic._fact_from_content('{"durable": true, "category": "work", "title": "x", "content": ""}') is None,
+    ic._fact_from_content('{"durable": true, "topic_key": "profile/x", "title": "x", "content": ""}') is None,
 )
-# unknown/absent category falls back to profile/other (no free-form slugs)
-f2 = ic._fact_from_content('{"durable": true, "title": "T", "content": "C"}')
-check("absent category -> profile/other", f2 and f2["topic_key"] == "profile/other")
-f3 = ic._fact_from_content('{"durable": true, "category": "random-thing", "title": "T", "content": "C"}')
-check("invalid category -> profile/other", f3 and f3["topic_key"] == "profile/other")
+
+print("=== _normalize_topic_key ===")
+check("already good preserved", ic._normalize_topic_key("profile/role") == "profile/role")
+check("absent -> profile/misc", ic._fact_from_content('{"durable": true, "title": "T", "content": "C"}')["topic_key"] == "profile/misc")
+check("empty -> profile/misc", ic._normalize_topic_key("") == "profile/misc")
+check("uppercase+spaces+punct sanitized", ic._normalize_topic_key("profile/Family Sister!") == "profile/family-sister")
+check("non-profile coerced under profile/", ic._normalize_topic_key("employer") == "profile/employer")
+check("hierarchical slug kept", ic._normalize_topic_key("profile/decision/move-city") == "profile/decision/move-city")
 
 # ---------------------------------------------------------------------------
 # Extraction fail-open: no key -> None

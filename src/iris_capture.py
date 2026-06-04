@@ -50,34 +50,30 @@ _MIN_MESSAGE_LEN = 12
 
 _env_cache: Optional[dict] = None
 
-# Controlled topic_key vocabulary: keeps memory clustered + dedupable at scale.
-_ALLOWED_CATEGORIES = {
-    "work",
-    "family",
-    "relationships",
-    "health",
-    "location",
-    "preferences",
-    "decisions",
-}
+_MAX_KNOWN_FACTS = 60  # bound the prompt; profile facts don't grow unbounded fast.
 
 _EXTRACT_SYSTEM = (
-    "You capture DURABLE PROFILE facts about the user for a personal assistant's "
-    "long-term memory. Extract ONLY stable facts about WHO THE USER IS: "
-    "employer/company, job/role, family, relationships, health, location/where "
-    "they live, strong lasting preferences, and major life decisions or "
-    "commitments. "
-    "Do NOT capture: project status or progress, code/technical/work-task "
-    "details, day-to-day activity, questions, requests, opinions about external "
-    "things, or anything transient that changes week to week. "
-    "Reply with ONE JSON object and nothing else. "
-    'If there IS a durable profile fact: {"durable": true, '
-    '"category": "work|family|relationships|health|location|preferences|decisions", '
-    '"title": "<=70 char summary", '
-    '"content": "the fact in ONE concise sentence, third person about the user"}. '
-    'If there is NOT: {"durable": false}. '
-    "Be conservative: when unsure, return durable:false. At most one fact per "
-    "message — pick the single most important durable fact."
+    "You maintain a personal assistant's long-term memory of DURABLE PROFILE facts "
+    "about the user: employer/company, job/role, family, relationships, health, "
+    "location, strong lasting preferences, and major life decisions. "
+    "You are given the facts ALREADY KNOWN (as 'topic_key: fact') and the user's "
+    "NEW message. Decide whether the new message contains a durable profile fact, "
+    "following these rules: "
+    "(1) If it is ALREADY known and unchanged -> reply {\"durable\": false}. "
+    "(2) If it UPDATES or corrects a known fact -> reuse that fact's EXACT topic_key "
+    "(its content will be overwritten). "
+    "(3) If it is a NEW durable fact -> create a SPECIFIC topic_key "
+    "'profile/<slug>' where the slug is the precise dimension, e.g. "
+    "profile/employer, profile/role, profile/family-sister, profile/location-home, "
+    "profile/decision-move-city. One fact = one specific key (do NOT lump distinct "
+    "facts under one broad key). "
+    "Do NOT capture project status/progress, code or work-task details, day-to-day "
+    "activity, questions, requests, or anything transient. Be conservative: when "
+    "unsure, reply {\"durable\": false}. At most one fact per message. "
+    "Reply with ONE JSON object and nothing else: "
+    '{"durable": true, "topic_key": "profile/<slug>", "title": "<=70 chars", '
+    '"content": "the fact in ONE concise sentence, third person about the user"} '
+    'OR {"durable": false}.'
 )
 
 
@@ -163,6 +159,12 @@ def _extract_fact(message: str) -> Optional[dict]:
         return None
     base = (env.get("OPENAI_BASE_URL") or _DEFAULT_OPENROUTER_BASE).rstrip("/")
     model = env.get("CAPTURE_MODEL") or _DEFAULT_CAPTURE_MODEL
+    known = _known_facts_block()
+    user_content = (
+        f"Already known facts:\n{known}\n\nNew message from the user:\n{message}"
+        if known
+        else f"Already known facts: (none yet)\n\nNew message from the user:\n{message}"
+    )
     body = json.dumps(
         {
             "model": model,
@@ -170,7 +172,7 @@ def _extract_fact(message: str) -> Optional[dict]:
             "max_tokens": 220,
             "messages": [
                 {"role": "system", "content": _EXTRACT_SYSTEM},
-                {"role": "user", "content": message},
+                {"role": "user", "content": user_content},
             ],
         }
     ).encode("utf-8")
@@ -196,17 +198,56 @@ def _fact_from_content(content: str) -> Optional[dict]:
     fact_content = (parsed.get("content") or "").strip()
     if not title or not fact_content:
         return None
-    # Map the model's category onto a fixed topic_key vocabulary so facts about
-    # the same dimension cluster on one key and Engram can dedupe them.
-    category = (parsed.get("category") or "").strip().lower()
-    if category not in _ALLOWED_CATEGORIES:
-        category = "other"
     return {
         "title": title[:120],
         "content": fact_content,
         "type": "profile",
-        "topic_key": f"profile/{category}",
+        "topic_key": _normalize_topic_key(parsed.get("topic_key")),
     }
+
+
+def _normalize_topic_key(raw: Optional[str]) -> str:
+    """Force a stable 'profile/<slug>' key so Engram upserts cleanly.
+
+    The model returns a specific key (e.g. profile/employer); we sanitize the
+    slug (lowercase, [a-z0-9-]) and default to profile/misc on anything off.
+    """
+    tk = (raw or "").strip().lower()
+    if tk.startswith("profile/"):
+        slug = tk[len("profile/"):]
+    else:
+        slug = tk
+    cleaned = "".join(c if (c.isalnum() or c in "-/") else "-" for c in slug).strip("-/")
+    return f"profile/{cleaned}" if cleaned else "profile/misc"
+
+
+def _known_facts_block() -> str:
+    """Fetch current durable profile facts (topic_key: content) for the extractor.
+
+    Lets the model reuse an exact topic_key when updating a fact (Engram upserts
+    by (project, topic_key)) and avoid re-saving anything already known. Bounded
+    and never raises.
+    """
+    try:
+        base = _engram_base()
+        data = _get(base + "/export?project=" + _CAPTURE_PROJECT)
+        if not data:
+            return ""
+        obs = data if isinstance(data, list) else (data.get("observations") or [])
+        lines = []
+        for o in obs:
+            tk = (o.get("topic_key") or "")
+            if not tk.startswith("profile/"):
+                continue
+            if (o.get("deleted_at") or None) is not None:
+                continue
+            content = (o.get("content") or "").strip().replace("\n", " ")
+            if content:
+                lines.append(f"{tk}: {content[:160]}")
+        return "\n".join(lines[:_MAX_KNOWN_FACTS])
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("iris_capture known-facts fetch failed: %s", exc)
+        return ""
 
 
 def _parse_json_object(text: str) -> Optional[dict]:
@@ -237,6 +278,16 @@ def _engram_headers() -> dict:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def _get(url: str):
+    req = urllib.request.Request(url, headers=_engram_headers(), method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("iris_capture engram GET %s failed: %s", url, exc)
+        return None
 
 
 def _post(url: str, payload: dict) -> Optional[dict]:
