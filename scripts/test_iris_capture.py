@@ -115,6 +115,15 @@ check("non-profile coerced under profile/", ic._normalize_topic_key("employer") 
 check("hierarchical slug kept", ic._normalize_topic_key("profile/decision/move-city") == "profile/decision/move-city")
 
 # ---------------------------------------------------------------------------
+# Provider-correct model derivation (the silent-no-save bug)
+# ---------------------------------------------------------------------------
+print("=== _default_capture_model ===")
+check("OpenAI direct -> bare id", ic._default_capture_model("https://api.openai.com/v1") == "gpt-4o-mini")
+check("OpenRouter -> namespaced id", ic._default_capture_model("https://openrouter.ai/api/v1") == "openai/gpt-4o-mini")
+check("OpenRouter case-insensitive", ic._default_capture_model("https://OpenRouter.ai/API/v1") == "openai/gpt-4o-mini")
+check("unknown gateway -> bare id (OpenAI-compatible default)", ic._default_capture_model("https://llm.internal/v1") == "gpt-4o-mini")
+
+# ---------------------------------------------------------------------------
 # Extraction fail-open: no key -> None
 # ---------------------------------------------------------------------------
 print("=== _extract_fact no key ===")

@@ -41,8 +41,16 @@ except Exception:  # pragma: no cover - defensive (partial install)
 
 _IRIS_ENV = Path.home() / "iris-ai" / ".env"
 _DEFAULT_ENGRAM = "http://127.0.0.1:7437"
-_DEFAULT_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-_DEFAULT_CAPTURE_MODEL = "openai/gpt-4o-mini"
+# Mirror iris-ai's own resolution (src/brain/config): same env var
+# (OPENAI_BASE_URL) and the SAME default (OpenAI direct, not OpenRouter), so
+# capture targets exactly the provider iris already authenticates against with
+# OPENROUTER_API_KEY. Getting this wrong = the extraction call 404s/401s and the
+# whole capture silently no-ops (nothing saved).
+_DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
+# Chat model id differs by provider: OpenAI direct uses the bare id; OpenRouter
+# namespaces it under the vendor.
+_CAPTURE_MODEL_OPENAI = "gpt-4o-mini"
+_CAPTURE_MODEL_OPENROUTER = "openai/gpt-4o-mini"
 _CAPTURE_SESSION = "iris-capture"
 _CAPTURE_PROJECT = "sebas"  # personal/profile facts live here
 _HTTP_TIMEOUT = 12
@@ -152,13 +160,23 @@ def _load_env() -> dict:
 # Extraction (cheap LLM call)
 # ---------------------------------------------------------------------------
 
+def _default_capture_model(base: str) -> str:
+    """Pick a chat-model id that matches the resolved provider.
+
+    OpenRouter namespaces OpenAI models as ``openai/gpt-4o-mini``; OpenAI direct
+    wants the bare ``gpt-4o-mini``. Using the wrong one 404s the request and the
+    capture silently drops the fact, so derive it from the base URL.
+    """
+    return _CAPTURE_MODEL_OPENROUTER if "openrouter" in base.lower() else _CAPTURE_MODEL_OPENAI
+
+
 def _extract_fact(message: str) -> Optional[dict]:
     env = _load_env()
     key = env.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
     if not key:
         return None
-    base = (env.get("OPENAI_BASE_URL") or _DEFAULT_OPENROUTER_BASE).rstrip("/")
-    model = env.get("CAPTURE_MODEL") or _DEFAULT_CAPTURE_MODEL
+    base = (env.get("OPENAI_BASE_URL") or _DEFAULT_OPENAI_BASE).rstrip("/")
+    model = env.get("CAPTURE_MODEL") or _default_capture_model(base)
     known = _known_facts_block()
     user_content = (
         f"Already known facts:\n{known}\n\nNew message from the user:\n{message}"
