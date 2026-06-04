@@ -348,6 +348,11 @@ def _pre_llm_call_hook(
         from iris_protocol import build_iris_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: iris_protocol import failed (%s)", exc)
+    iris_maybe_capture = None
+    try:
+        from iris_capture import maybe_capture as iris_maybe_capture
+    except ImportError as exc:
+        logger.warning("cobalt-routing: iris_capture import failed (%s)", exc)
     try:
         from context_loader import build_context_block
     except ImportError as exc:
@@ -366,6 +371,18 @@ def _pre_llm_call_hook(
     markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
     iris = build_iris_protocol_block(task_id=task_id) if build_iris_protocol_block else None
     session_id = kwargs.get("session_id", "")
+
+    # Deterministic memory capture (fire-and-forget; no-op unless iris is
+    # configured). Runs in a daemon thread, never blocks this turn, swallows
+    # all errors. Decoupled from iris: writes to Engram, never calls iris.* .
+    if iris_maybe_capture is not None:
+        try:
+            iris_maybe_capture(
+                user_message=user_message, task_id=task_id, session_id=session_id
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("cobalt-routing: iris_capture call failed (%s)", exc)
+
     project_context = (
         build_context_block(task_id=task_id, session_id=session_id)
         if build_context_block else None

@@ -638,6 +638,7 @@ PLUGIN_FILES=(
     "memory_protocol.py"
     "markitdown_protocol.py"
     "iris_protocol.py"
+    "iris_capture.py"
     "firewall.py"
     "firewall_tool.py"
     "context_loader.py"

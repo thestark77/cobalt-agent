@@ -49,7 +49,7 @@ command -v git >/dev/null 2>&1 || die "git not found."
 # Files that make up the cobalt-routing plugin (kept in sync with install.sh).
 PLUGIN_FILES=(
   "__init__.py" "router.py" "tool_guard.py" "skill_injector.py" "sdd_triage.py"
-  "memory_protocol.py" "markitdown_protocol.py" "iris_protocol.py" "firewall.py"
+  "memory_protocol.py" "markitdown_protocol.py" "iris_protocol.py" "iris_capture.py" "firewall.py"
   "firewall_tool.py" "context_loader.py" "version_manager.py" "compat.py"
   "preset_tool.py" "config.py" "utils.py" "plugin.yaml" "presets.yaml"
 )
