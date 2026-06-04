@@ -20,6 +20,7 @@ etc. (all underscores — the callable name has no dot).
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -145,15 +146,50 @@ def _iris_configured() -> bool:
         _CONFIGURED = False
         return False
     try:
-        import yaml
-        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        text = config_path.read_text(encoding="utf-8")
     except Exception as exc:
         logger.debug("iris_protocol: cannot read config (%s)", exc)
         _CONFIGURED = False
         return False
-    servers = data.get("mcp_servers") or {}
-    _CONFIGURED = "iris" in servers
+    try:
+        import yaml
+        data = yaml.safe_load(text) or {}
+        servers = data.get("mcp_servers") or {}
+        _CONFIGURED = "iris" in servers
+    except Exception as exc:
+        # PyYAML may be absent in the plugin runtime. Fail OPEN via a tolerant
+        # text scan instead of disabling capture on a missing dependency — a
+        # missing 'import yaml' must never silently turn memory capture off.
+        logger.debug("iris_protocol: yaml unavailable; text-scan fallback (%s)", exc)
+        _CONFIGURED = _config_mentions_iris_server(text)
     return _CONFIGURED
+
+
+def _config_mentions_iris_server(text: str) -> bool:
+    """Detect an ``iris:`` server under ``mcp_servers:`` without a YAML parser.
+
+    Tolerant by design: it only needs to confirm iris is wired so capture stays
+    enabled. Looks for the mcp_servers block, then an ``iris:`` key indented
+    beneath it.
+    """
+    in_block = False
+    block_indent = 0
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if re.match(r"^mcp_servers\s*:", line):
+            in_block = True
+            block_indent = indent
+            continue
+        if in_block:
+            if indent <= block_indent:
+                in_block = False  # dedented out of the block
+                continue
+            m = re.match(r"^\s*([A-Za-z0-9_.-]+)\s*:", line)
+            if m and m.group(1) == "iris":
+                return True
+    return False
 
 
 _CONFIGURED: Optional[bool] = None
