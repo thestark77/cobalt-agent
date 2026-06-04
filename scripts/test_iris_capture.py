@@ -158,6 +158,89 @@ ic._post = _orig_post
 ic._engram_base = _orig_base
 
 # ---------------------------------------------------------------------------
+# Cosine + clustering (deterministic primitives)
+# ---------------------------------------------------------------------------
+print("=== _cosine ===")
+check("identical -> 1.0", abs(ic._cosine([1.0, 0.0], [1.0, 0.0]) - 1.0) < 1e-9)
+check("orthogonal -> 0.0", abs(ic._cosine([1.0, 0.0], [0.0, 1.0])) < 1e-9)
+check("opposite -> -1.0", abs(ic._cosine([1.0, 0.0], [-1.0, 0.0]) + 1.0) < 1e-9)
+check("scale-invariant", abs(ic._cosine([2.0, 0.0], [5.0, 0.0]) - 1.0) < 1e-9)
+check("empty -> 0.0", ic._cosine([], [1.0]) == 0.0)
+
+print("=== _cluster_by_similarity ===")
+# 0 and 1 nearly identical; 2 orthogonal -> clusters {0,1}, {2}
+cl = ic._cluster_by_similarity([[1.0, 0.0], [1.0, 0.01], [0.0, 1.0]], 0.8)
+check("two clusters", len(cl) == 2)
+check("first cluster merges 0,1", [0, 1] in cl)
+check("singleton 2", [2] in cl)
+check("high threshold -> all singletons", len(ic._cluster_by_similarity([[1.0, 0.0], [1.0, 0.01]], 0.999999)) == 2)
+
+print("=== _env_float ===")
+_orig_load2 = ic._load_env
+ic._load_env = lambda: {"CAPTURE_MERGE_THRESHOLD": "0.7"}
+check("reads from env", abs(ic._env_float("CAPTURE_MERGE_THRESHOLD", 0.8) - 0.7) < 1e-9)
+check("default when absent", abs(ic._env_float("NOPE", 0.42) - 0.42) < 1e-9)
+ic._load_env = lambda: {"CAPTURE_MERGE_THRESHOLD": "garbage"}
+check("garbage -> default", abs(ic._env_float("CAPTURE_MERGE_THRESHOLD", 0.8) - 0.8) < 1e-9)
+ic._load_env = _orig_load2
+
+# ---------------------------------------------------------------------------
+# Relevance-scoped known facts (dynamic count via threshold)
+# ---------------------------------------------------------------------------
+print("=== _relevant_facts (threshold, not fixed width) ===")
+_facts = [
+    {"topic_key": "profile/a", "content": "AAA"},
+    {"topic_key": "profile/b", "content": "BBB"},
+    {"topic_key": "profile/c", "content": "CCC"},
+]
+_orig_embed = ic._embed
+_orig_load3 = ic._load_env
+ic._load_env = lambda: {}  # threshold defaults to _RELEVANCE_THRESHOLD (0.30)
+# message vec aligned with fact A, half-aligned with B, orthogonal to C
+ic._embed = lambda texts: [[1.0, 0.0], [1.0, 0.0], [0.7, 0.7], [0.0, 1.0]]
+rel = ic._relevant_facts("msg", _facts)
+check("returns only above-threshold facts", [o["topic_key"] for o in rel] == ["profile/a", "profile/b"])
+check("most-similar first", rel[0]["topic_key"] == "profile/a")
+ic._embed = lambda texts: None  # embeddings unavailable -> None (caller sends all)
+check("embeddings unavailable -> None", ic._relevant_facts("msg", _facts) is None)
+ic._embed = _orig_embed
+ic._load_env = _orig_load3
+
+print("=== _known_facts_block (tiny scale -> all; no message -> all) ===")
+_orig_export = ic._export_profile_facts
+ic._export_profile_facts = lambda: _facts  # 3 facts (<= _RELEVANCE_MIN_FACTS)
+check("no message -> all facts, no embeddings call", "profile/a" in ic._known_facts_block("") and "profile/c" in ic._known_facts_block(""))
+ic._export_profile_facts = _orig_export
+
+# ---------------------------------------------------------------------------
+# Deterministic consolidation: cluster + merge + soft-delete absorbed key
+# ---------------------------------------------------------------------------
+print("=== consolidate_profile ===")
+_cfacts = [
+    {"topic_key": "profile/work", "title": "Work", "content": "Works at Bemovil.", "id": 1, "updated_at": "2026-01-01"},
+    {"topic_key": "profile/employer", "title": "Employer", "content": "Employed at Bemovil.", "id": 2, "updated_at": "2026-02-01"},
+    {"topic_key": "profile/city", "title": "City", "content": "Lives in Buga.", "id": 3, "updated_at": "2026-01-15"},
+]
+_o_embed, _o_chat, _o_write, _o_del, _o_load = ic._embed, ic._chat_completion, ic._write_to_engram, ic._delete_obs, ic._load_env
+ic._load_env = lambda: {}  # merge threshold default 0.80
+# facts 0,1 near-identical; 2 orthogonal
+ic._embed = lambda texts: [[1.0, 0.0], [0.99, 0.02], [0.0, 1.0]]
+ic._chat_completion = lambda s, u, m: '{"title": "Bemovil", "content": "Works at Bemovil (employed there)."}'
+_writes, _deletes = [], []
+ic._write_to_engram = lambda f: _writes.append(f)
+ic._delete_obs = lambda i: (_deletes.append(i) or True)
+res = ic.consolidate_profile(facts=_cfacts)
+check("one cluster merged", res.get("clusters_merged") == 1)
+check("canonical = most-recent key (profile/employer)", res.get("merged_into") == ["profile/employer"])
+check("wrote merged fact once", len(_writes) == 1 and _writes[0]["topic_key"] == "profile/employer")
+check("merged content from model", _writes and "Bemovil" in _writes[0]["content"])
+check("soft-deleted the absorbed obs id (1)", _deletes == [1])
+check("orthogonal fact untouched (not deleted)", 3 not in _deletes)
+ic._embed = lambda texts: None
+check("no embeddings -> skipped, no deletes", ic.consolidate_profile(facts=_cfacts).get("skipped") == "embeddings unavailable")
+ic._embed, ic._chat_completion, ic._write_to_engram, ic._delete_obs, ic._load_env = _o_embed, _o_chat, _o_write, _o_del, _o_load
+
+# ---------------------------------------------------------------------------
 print()
 print(f"PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)
