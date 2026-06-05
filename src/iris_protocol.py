@@ -7,12 +7,17 @@ When the server is absent the entire module is a no-op: every public function
 returns None or an empty string.  No import of this module can break cobalt
 when Iris is not installed.
 
-The 5 tools exposed by the iris MCP server (x-contract-version: 2):
-  iris.search       — full-text / semantic search over brain_nodes
-  iris.get_context  — retrieve persona + relevant context items
-  iris.timeline     — chronological event log
-  iris.remember     — write an observation to Engram + brain store
-  iris.decide       — weighted decision support (WSM)
+The tools exposed by the iris MCP server (x-contract-version: 5):
+  iris.search               — full-text / semantic search over brain_nodes
+  iris.get_context          — retrieve persona + relevant context items
+  iris.timeline             — chronological event log
+  iris.remember             — write an observation to Engram + brain store
+  iris.decide               — weighted decision support (WSM)
+  iris.profile              — OCEAN traits + co-created goals (read-only)
+  iris.nudge                — strategic framing toward a goal
+  iris.proactive_check      — scheduler poll (cron only; not for the orchestrator)
+  iris.pending_nudges       — list unresolved nudges (feedback loop)
+  iris.record_nudge_outcome — record acted/ignored/rejected (feedback loop)
 
 Hermes prefixes MCP tools as mcp_<server>_<tool> and sanitizes dots to
 underscores, so these surface as mcp_iris_iris_search, mcp_iris_iris_get_context,
@@ -112,6 +117,26 @@ memory that does not scale. Just have the conversation; the capture happens on i
   the user asked for it AND you actually made the call.
 - Reading memory is always welcome (get_context / search) — and remember the rule
   above: search before ever claiming you don't know something about the user.
+
+# PROACTIVE NUDGE FEEDBACK — record how the user responds (do this silently)
+Sometimes YOU (Iris) send the user a short proactive nudge about one of their
+goals out-of-band — delivered by the system on a schedule, NOT typed in this
+conversation. So the user may reply to something you "said" that is not in this
+turn's history: a small reminder, suggestion, or push about a goal.
+When the user's message reads like a reply to such a nudge (they react to a
+suggestion/reminder about a goal that you did not raise in THIS conversation):
+  1. Call mcp_iris_iris_pending_nudges(channel="proactive") to find the open
+     nudge(s). Match the user's reply to the most recent one by its framing.
+  2. Infer the outcome from how they reacted:
+       - "acted"    — they engaged with it, did it, or committed to it.
+       - "rejected" — they pushed back, said no, or found it unwelcome.
+       - "ignored"  — they deflected or changed the subject.
+  3. Call mcp_iris_iris_record_nudge_outcome(nudge_id, outcome, feedback?) with
+     the matching id (feedback = a short quote/paraphrase of their reaction).
+Do this ONCE, silently — never announce it and never mention nudge ids or tools
+to the user. If nothing pending matches, do nothing. This is how you learn which
+framings actually move this person; it is the only reason to touch these tools.
+Never call mcp_iris_iris_proactive_check — proactive sending is the system's job.
 
 # COMPLEMENTARY TO ENGRAM
 Engram (mcp_engram_mem_*) is the canonical memory; the iris_* tools add semantic

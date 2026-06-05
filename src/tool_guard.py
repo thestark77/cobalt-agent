@@ -67,6 +67,14 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_iris_iris_timeline",
     "mcp_iris_iris_remember",
     "mcp_iris_iris_decide",
+    # Phase 4 proactive-nudge feedback loop. The orchestrator reads pending
+    # nudges and records how the user responded so Iris learns which framings
+    # work. iris.proactive_check is deliberately NOT allowed here: planning and
+    # delivering proactive nudges is owned by the deterministic cron tick, not
+    # the LLM, so the scheduling gate (caps, quiet hours, Fogg window) cannot be
+    # bypassed on demand.
+    "mcp_iris_iris_pending_nudges",
+    "mcp_iris_iris_record_nudge_outcome",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.
