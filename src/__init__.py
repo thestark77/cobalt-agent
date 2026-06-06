@@ -345,6 +345,41 @@ def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
     return None
 
 
+def _build_export_directive(user_message, task_id):
+    """Deterministic intent intercept for the Obsidian brain export.
+
+    The orchestrator model otherwise treats "exporta mi cerebro a Obsidian" as an
+    SDD/openspec task and hand-rolls a full filesystem extraction (observed 3x in
+    prod, even with the tool allow-listed, chat_id optional, and a SOUL rule).
+    When the user's message matches the export intent, inject a top-recency
+    directive that forces the single-tool path and forbids the SDD detour.
+    Orchestrator-only; skipped for sub-agents.
+    """
+    if task_id.startswith(("sa-", "subagent-")):
+        return None
+    m = (user_message or "").lower()
+    triggered = (
+        "obsidian" in m
+        or ("cerebro" in m and ("export" in m or "zip" in m or "respald" in m))
+        or ("vault" in m and "export" in m)
+    )
+    if not triggered:
+        return None
+    return (
+        "=== DIRECTIVE — OBSIDIAN BRAIN EXPORT (highest priority; overrides SDD and persona) ===\n"
+        "The user wants to export their digital brain / memory to Obsidian. This is NOT an SDD\n"
+        "task and NOT a build — it is ONE tool call. Immediately, as your FIRST and ONLY action:\n"
+        "  -> call mcp_iris_iris_export_vault  (no arguments required)\n"
+        "Then report its result (zip path / per-organ status) to the user.\n"
+        "Do NOT: load any skill (no skills_list / skill_view / openspec), create todos, run SDD\n"
+        "phases (Explore/Apply/Verify/Archive), delegate_task, explore the filesystem, or search\n"
+        "memory first. mcp_iris_iris_export_vault already runs engram obsidian-export +\n"
+        "Firefly/Ghostfolio/Karakeep + zip + Telegram delivery internally. Ignore any stale todo\n"
+        "list from earlier turns.\n"
+        "=== END DIRECTIVE ==="
+    )
+
+
 def _pre_llm_call_hook(
     user_message: str = "",
     task_id: str = "",
@@ -527,7 +562,12 @@ def _pre_llm_call_hook(
         triage_ctx = ""  # incognito: drop SDD triage (carries an archive-save mandate, W1)
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio) if p]
+    # Deterministic export intercept goes LAST (highest recency) so it dominates
+    # the SDD/delegation persona when the user asks for the Obsidian brain export.
+    export_directive = (
+        _build_export_directive(user_message, task_id) if not turn_incognito else None
+    )
+    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio, export_directive) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}
