@@ -91,11 +91,6 @@ WRITE_TOOLS = frozenset({
     "mcp_ghostfolio_add_market_data_points",
     "mcp_ghostfolio_create_activity",
     "mcp_ghostfolio_delete_activity",
-    # Calendar event mutators (Phase 4) — a private turn must not create/move/RSVP.
-    "mcp_calendar_create_event",
-    "mcp_calendar_update_event",
-    "mcp_calendar_delete_event",
-    "mcp_calendar_respond_to_event",
 })
 
 # Safety TTL: a sticky session auto-offs after this many seconds of inactivity,
