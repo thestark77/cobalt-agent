@@ -110,6 +110,35 @@ def _secret_marker_present() -> bool:
     return _secret_marker_path().exists()
 
 
+def _armed_marker_path() -> Path:
+    """Marker meaning 'the NEXT message is one-shot secret'. Set by the
+    `/secret` slash command (which is handled by the gateway and never reaches
+    the LLM, so it cannot make its OWN message incognito). Consumed by the next
+    evaluate_turn()."""
+    p = _state_path()
+    return p.with_name(p.stem + "-armed.json")
+
+
+def arm_secret() -> None:
+    try:
+        path = _armed_marker_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"since": _now().isoformat()}), encoding="utf-8")
+    except Exception as exc:
+        logger.debug("cobalt-incognito: cannot arm secret (%s)", exc)
+
+
+def is_armed() -> bool:
+    return _armed_marker_path().exists()
+
+
+def clear_armed() -> None:
+    try:
+        _armed_marker_path().unlink()
+    except Exception:
+        pass
+
+
 def _ttl_seconds() -> int:
     raw = os.environ.get("COBALT_INCOGNITO_TTL_SECONDS")
     if raw:
@@ -222,6 +251,9 @@ def evaluate_turn(user_message: str) -> Tuple[bool, Optional[str]]:
     """
     cmds = parse_commands(user_message)
     active = is_session_active()
+    armed = is_armed()
+    if armed:
+        clear_armed()  # one-shot: consume the arm set by a prior /secret command
     note: Optional[str] = None
 
     if cmds["toggle"] == "on":
@@ -243,14 +275,16 @@ def evaluate_turn(user_message: str) -> Tuple[bool, Optional[str]]:
     if active:
         _touch_activity()
 
-    # /secret marker crosses the process boundary to sub-agents; clear it on any
-    # non-secret turn so it never lingers past the one message it belongs to.
-    if cmds["secret"]:
+    # This turn is one-shot secret if the message embeds /secret OR a prior
+    # /secret command armed it. The marker crosses the process boundary to
+    # sub-agents; it is cleared on any later non-secret, non-session turn.
+    secret_this_turn = cmds["secret"] or armed
+    if secret_this_turn:
         set_secret_marker()
-    else:
+    elif not active:
         clear_secret_marker()
 
-    turn_incognito = active or cmds["secret"]
+    turn_incognito = active or secret_this_turn
     return turn_incognito, note
 
 
@@ -353,6 +387,44 @@ TOOL_SCHEMA = {
         "required": ["action"],
     },
 }
+
+
+# ── Slash-command handlers (gateway: fn(raw_args) -> str) ────────────────────
+# Registered via ctx.register_command so Hermes routes /incognito and /secret to
+# these instead of rejecting them as unknown commands.
+
+def handle_incognito_command(raw_args: str = "", **kw) -> str:
+    """/incognito [on|off|status] — toggle the sticky session (bare = toggle)."""
+    arg = (raw_args or "").strip().lower()
+    if arg == "status":
+        return handle_incognito({"action": "status"})
+    if arg == "on":
+        return handle_incognito({"action": "on"})
+    if arg == "off":
+        return handle_incognito({"action": "off"})
+    # bare /incognito → toggle
+    new_state = not is_session_active()
+    return handle_incognito({"action": "on" if new_state else "off"})
+
+
+def handle_secret_command(raw_args: str = "", **kw) -> str:
+    """/secret — arm the NEXT message as a one-shot private message.
+
+    A leading-slash command is handled by the gateway and never reaches the
+    LLM, so it cannot make its OWN message incognito (and cannot see its
+    attachments). Instead it arms the next message: whatever you send next
+    (text + images + files + audio) is processed and answered, but nothing
+    persists. For a one-shot WITHOUT this two-step, put /secret NOT at the start
+    of the message (e.g. "mira esto /secret") — that reaches the agent directly."""
+    arm_secret()
+    extra = ""
+    if (raw_args or "").strip():
+        extra = (" (Nota: lo que escribiste después de /secret no lo procesé; "
+                 "mandá el contenido privado en el próximo mensaje.)")
+    return (
+        "🔒 Listo: tu PRÓXIMO mensaje será privado — lo proceso y respondo, pero "
+        "no guardo nada (ni texto ni archivos/fotos/audio). Mandalo ahora." + extra
+    )
 
 
 def handle_incognito(args: dict, **kw) -> str:

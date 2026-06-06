@@ -156,6 +156,31 @@ class IncognitoTest(unittest.TestCase):
         self.assertIsNotNone(inc.block_if_incognito("mcp_engram_mem_save"))
         self.assertIsNone(inc.block_if_incognito("mcp_engram_mem_search"))
 
+    # --- slash command handlers -------------------------------------------
+    def test_incognito_command_on_off_toggle(self):
+        out = inc.handle_incognito_command("on")
+        self.assertIn("ON", out.upper())
+        self.assertTrue(inc.is_session_active())
+        inc.handle_incognito_command("off")
+        self.assertFalse(inc.is_session_active())
+        # bare toggles
+        inc.handle_incognito_command("")
+        self.assertTrue(inc.is_session_active())
+        inc.handle_incognito_command("")
+        self.assertFalse(inc.is_session_active())
+
+    def test_secret_command_arms_next_message(self):
+        out = inc.handle_secret_command("")
+        self.assertIn("PRÓXIMO", out.upper())
+        self.assertTrue(inc.is_armed())
+        # next message (no /secret in it) is one-shot incognito, and consumes arm
+        ti, _ = inc.evaluate_turn("este es mi contenido privado")
+        self.assertTrue(ti)
+        self.assertFalse(inc.is_armed())  # consumed
+        # the turn AFTER is back to normal
+        ti2, _ = inc.evaluate_turn("mensaje normal")
+        self.assertFalse(ti2)
+
     # --- directive ---------------------------------------------------------
     def test_directive_present_when_incognito(self):
         out = inc.build_incognito_directive(True, None)

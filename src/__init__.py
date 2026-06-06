@@ -568,6 +568,23 @@ def register(ctx):
     except Exception as exc:
         logger.warning("cobalt-incognito: tool registration failed (continuing): %s", exc)
 
+    # Slash commands: Hermes routes leading-slash messages to the gateway command
+    # dispatcher BEFORE the LLM, so /incognito and /secret must be registered here
+    # (otherwise they bounce as "Unknown command"). fn(raw_args) -> str.
+    try:
+        from incognito import handle_incognito_command, handle_secret_command
+        ctx.register_command(
+            "incognito", handle_incognito_command,
+            description="Incognito sticky toggle (read-yes/write-no): /incognito [on|off|status]",
+            args_hint="on|off|status",
+        )
+        ctx.register_command(
+            "secret", handle_secret_command,
+            description="Make your NEXT message private — processed but never persisted",
+        )
+    except Exception as exc:
+        logger.warning("cobalt-incognito: slash command registration failed (continuing): %s", exc)
+
     ctx.register_hook("pre_tool_call", _pre_tool_call_hook)
     ctx.register_hook("pre_llm_call", _pre_llm_call_hook)
 
