@@ -680,13 +680,14 @@ header "Step 6/10: SOUL.md + Configuration"
 if [ -f "$COBALT_TMP/SOUL.md" ]; then
     SOUL_DEST="$HERMES_HOME/SOUL.md"
     SOUL_SRC="$COBALT_TMP/SOUL.md"
-    # Deploy-time config (bot email, etc.) lives in a VPS-local env file that is
-    # NOT in the repo, so per-deployment values are never hardcoded in SOUL.md.
-    COBALT_ENV_FILE="$HERMES_HOME/cobalt.env"
-    # shellcheck disable=SC1090
-    [ -f "$COBALT_ENV_FILE" ] && . "$COBALT_ENV_FILE"
+    # The bot's Google account lives in ~/.hermes/config.yaml under `cobalt.bot_email`,
+    # alongside the other Hermes settings — no separate file. Exported
+    # COBALT_BOT_EMAIL still overrides it (for testing).
+    if [ -z "${COBALT_BOT_EMAIL:-}" ] && [ -f "$HERMES_HOME/config.yaml" ]; then
+        COBALT_BOT_EMAIL="$("$VENV_DIR/bin/python" -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; print(((d.get("cobalt") or {}).get("bot_email")) or "")' "$HERMES_HOME/config.yaml" 2>/dev/null || true)"
+    fi
     if [ -z "${COBALT_BOT_EMAIL:-}" ]; then
-        warn "COBALT_BOT_EMAIL not set (create $COBALT_ENV_FILE from cobalt.env.example). SOUL.md will say 'its own Google account'."
+        warn "cobalt.bot_email not set in $HERMES_HOME/config.yaml — SOUL.md will say 'its own Google account'."
     fi
     SOUL_RESULT=$(COBALT_BOT_EMAIL="${COBALT_BOT_EMAIL:-}" "$VENV_DIR/bin/python" - "$SOUL_SRC" "$SOUL_DEST" << 'PYEOF'
 import os, sys

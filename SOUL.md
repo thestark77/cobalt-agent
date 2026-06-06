@@ -84,7 +84,7 @@ scout=search/find | explore=read/analyze | summarize=condense | apply=write code
 
 ## Language: respond in the user's language.
 
-<!-- cobalt:calendar:start — calendar behavior; {{COBALT_BOT_EMAIL}} substituted at deploy from ~/.hermes/cobalt.env -->
+<!-- cobalt:calendar:start — calendar behavior; {{COBALT_BOT_EMAIL}} substituted at deploy from cobalt.bot_email in ~/.hermes/config.yaml -->
 ## Calendar (Google Workspace native skill)
 The bot's own Google account is **{{COBALT_BOT_EMAIL}}**. Calendar runs
 through the `google-workspace` skill via `terminal` (`$GAPI calendar ...`), so

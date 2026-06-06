@@ -86,19 +86,20 @@ ok "Redeployed $COPIED plugin file(s) to $PLUGIN_DIR"
 #     markers is updated; everything after cobalt:managed:end is left intact.
 # ---------------------------------------------------------------------------
 if [ -f "$SCRIPT_DIR/SOUL.md" ]; then
-  # Pull deploy-time config (bot email, etc.) from the VPS-local env file.
-  # This file is NOT in the repo; it holds per-deployment values so they are
-  # never hardcoded in SOUL.md. See cobalt.env.example for the format.
-  COBALT_ENV_FILE="$HERMES_HOME/cobalt.env"
-  # shellcheck disable=SC1090
-  [ -f "$COBALT_ENV_FILE" ] && . "$COBALT_ENV_FILE"
-  if [ -z "${COBALT_BOT_EMAIL:-}" ]; then
-    warn "COBALT_BOT_EMAIL not set (create $COBALT_ENV_FILE from cobalt.env.example). SOUL.md will say 'its own Google account'."
-  fi
   PYBIN=""
   for cand in "$HERMES_HOME/hermes-agent/venv/bin/python" python3 python; do
     if command -v "$cand" >/dev/null 2>&1 || [ -x "$cand" ]; then PYBIN="$cand"; break; fi
   done
+  # The bot's Google account lives in ~/.hermes/config.yaml under `cobalt.bot_email`,
+  # alongside the other Hermes settings (telegram, mcp_servers, cobalt_firewall) —
+  # no separate file. An exported COBALT_BOT_EMAIL still overrides it (for testing).
+  CONFIG_FILE="$HERMES_HOME/config.yaml"
+  if [ -z "${COBALT_BOT_EMAIL:-}" ] && [ -n "$PYBIN" ] && [ -f "$CONFIG_FILE" ]; then
+    COBALT_BOT_EMAIL="$("$PYBIN" -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])) or {}; print(((d.get("cobalt") or {}).get("bot_email")) or "")' "$CONFIG_FILE" 2>/dev/null || true)"
+  fi
+  if [ -z "${COBALT_BOT_EMAIL:-}" ]; then
+    warn "cobalt.bot_email not set in $CONFIG_FILE — SOUL.md will say 'its own Google account'. Add a 'cobalt:' key with bot_email to name the bot account."
+  fi
   if [ -n "$PYBIN" ]; then
     SOUL_RESULT=$(COBALT_BOT_EMAIL="${COBALT_BOT_EMAIL:-}" "$PYBIN" - "$SCRIPT_DIR/SOUL.md" "$HERMES_HOME/SOUL.md" << 'PYEOF'
 import os, sys

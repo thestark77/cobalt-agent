@@ -5,6 +5,3 @@ __pycache__/
 dist/
 build/
 .venv/
-
-# VPS-local deploy config (never commit real values)
-cobalt.env
