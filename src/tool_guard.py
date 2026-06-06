@@ -87,6 +87,11 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_karakeep_remove_bookmark_from_list",
     "mcp_karakeep_attach_tag_to_bookmark",
     "mcp_karakeep_detach_tag_from_bookmark",
+    # iris SRS tools (Phase 3) — orchestrator manages review cards directly.
+    # create/review are also in incognito.WRITE_TOOLS (they persist).
+    "mcp_iris_iris_srs_create_card",
+    "mcp_iris_iris_srs_due_cards",
+    "mcp_iris_iris_srs_review_card",
     "clarify",
     "todo",
     "skills_list",

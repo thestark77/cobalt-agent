@@ -52,6 +52,8 @@ WRITE_TOOLS = frozenset({
     "mcp_iris_iris_remember",
     "mcp_iris_iris_decide",
     "mcp_iris_iris_record_nudge_outcome",
+    "mcp_iris_iris_srs_create_card",
+    "mcp_iris_iris_srs_review_card",
     # Hermes built-in local notes
     "memory",
     # Firefly III writers (Phase 1) — create/update/delete must be blocked in
