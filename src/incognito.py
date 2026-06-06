@@ -54,8 +54,26 @@ WRITE_TOOLS = frozenset({
     "mcp_iris_iris_record_nudge_outcome",
     # Hermes built-in local notes
     "memory",
-    # NOTE: future organ writers (Firefly create/update, Karakeep create) must
-    # be added here as those MCPs are wired, so incognito also skips accounting.
+    # Firefly III writers (Phase 1) — create/update/delete must be blocked in
+    # incognito so a private turn never mutates the finance ledger.
+    "mcp_firefly_store_transaction",
+    "mcp_firefly_update_transaction",
+    "mcp_firefly_delete_transaction",
+    "mcp_firefly_delete_transaction_journal",
+    "mcp_firefly_store_account",
+    "mcp_firefly_update_account",
+    "mcp_firefly_delete_account",
+    "mcp_firefly_store_bill",
+    "mcp_firefly_update_bill",
+    "mcp_firefly_delete_bill",
+    "mcp_firefly_store_category",
+    "mcp_firefly_update_category",
+    "mcp_firefly_delete_category",
+    "mcp_firefly_store_tag",
+    "mcp_firefly_update_tag",
+    "mcp_firefly_delete_tag",
+    # NOTE: future organ writers (Karakeep create/update) must be added here as
+    # those MCPs are wired, so incognito also skips them.
 })
 
 # Safety TTL: a sticky session auto-offs after this many seconds of inactivity,
