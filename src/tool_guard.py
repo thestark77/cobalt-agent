@@ -21,6 +21,7 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # tools listed below, which sync to Engram Cloud automatically.
     "cobalt_preset",
     "cobalt_firewall",
+    "cobalt_incognito",
     "clarify",
     "todo",
     "skills_list",

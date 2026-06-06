@@ -162,6 +162,14 @@ def maybe_capture(
     try:
         if task_id and (task_id.startswith("sa-") or task_id.startswith("subagent-")):
             return None
+        # Defense in depth: never capture on an incognito turn, independent of
+        # the gate in __init__ (the primary guard). Fail-open if unavailable.
+        try:
+            from incognito import is_incognito_effective
+            if is_incognito_effective():
+                return None
+        except Exception:
+            pass
         msg = (user_message or "").strip()
         if len(msg) < _MIN_MESSAGE_LEN or msg.startswith("/"):
             return None

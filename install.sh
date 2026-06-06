@@ -637,6 +637,7 @@ PLUGIN_FILES=(
     "sdd_triage.py"
     "memory_protocol.py"
     "markitdown_protocol.py"
+    "incognito.py"
     "iris_protocol.py"
     "iris_capture.py"
     "firewall.py"
