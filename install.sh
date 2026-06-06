@@ -642,6 +642,7 @@ PLUGIN_FILES=(
     "finance_protocol.py"
     "reconcile.py"
     "karakeep_protocol.py"
+    "ghostfolio_protocol.py"
     "iris_capture.py"
     "firewall.py"
     "firewall_tool.py"
