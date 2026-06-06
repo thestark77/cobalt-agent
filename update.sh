@@ -81,6 +81,54 @@ done
 ok "Redeployed $COPIED plugin file(s) to $PLUGIN_DIR"
 
 # ---------------------------------------------------------------------------
+# 2b. Redeploy the managed SOUL.md block (preserves the user's custom section)
+#     Mirrors install.sh Step 6: only the text between the cobalt:managed
+#     markers is updated; everything after cobalt:managed:end is left intact.
+# ---------------------------------------------------------------------------
+if [ -f "$SCRIPT_DIR/SOUL.md" ]; then
+  PYBIN=""
+  for cand in "$HERMES_HOME/hermes-agent/venv/bin/python" python3 python; do
+    if command -v "$cand" >/dev/null 2>&1 || [ -x "$cand" ]; then PYBIN="$cand"; break; fi
+  done
+  if [ -n "$PYBIN" ]; then
+    SOUL_RESULT=$("$PYBIN" - "$SCRIPT_DIR/SOUL.md" "$HERMES_HOME/SOUL.md" << 'PYEOF'
+import sys
+from pathlib import Path
+
+src_path, dest_path = Path(sys.argv[1]), Path(sys.argv[2])
+START = "<!-- cobalt:managed:start"
+END   = "<!-- cobalt:managed:end -->"
+new_content = src_path.read_text(encoding="utf-8")
+
+if not dest_path.exists():
+    dest_path.write_text(new_content, encoding="utf-8")
+    print("deployed (fresh)"); sys.exit(0)
+
+existing = dest_path.read_text(encoding="utf-8")
+if START not in existing:
+    dest_path.with_suffix(".md.bak").write_text(existing, encoding="utf-8")
+    dest_path.write_text(new_content, encoding="utf-8")
+    print("deployed (migrated — backup saved)"); sys.exit(0)
+
+end_idx = existing.find(END)
+user_section = existing[end_idx + len(END):] if end_idx != -1 else ""
+start_new, end_new = new_content.find(START), new_content.find(END)
+if start_new == -1 or end_new == -1:
+    dest_path.write_text(new_content, encoding="utf-8")
+    print("deployed (untagged source)"); sys.exit(0)
+
+managed_block = new_content[start_new : end_new + len(END)]
+dest_path.write_text(managed_block + user_section, encoding="utf-8")
+print("merged (managed section updated, user additions preserved)")
+PYEOF
+    )
+    ok "SOUL.md $SOUL_RESULT"
+  else
+    warn "No python found; skipped SOUL.md redeploy. Re-run install.sh to update it."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 3. Restart the Hermes gateway
 # ---------------------------------------------------------------------------
 if [ "$NO_RESTART" -eq 1 ]; then
