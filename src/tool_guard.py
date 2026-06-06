@@ -209,6 +209,24 @@ def check_tool_allowed(tool_name: str, task_id: str):
     if tool_name in ORCHESTRATOR_ALLOWED:
         return None
 
+    # Special case: the Hermes built-in `memory` tool is intentionally disabled
+    # (it writes to a capped local notes file that does not sync across sessions
+    # or machines — Engram is the real persistence layer). The model otherwise
+    # RETRIES `memory` in a loop on the generic "delegate" message and burns the
+    # whole iteration budget (observed 90/90 on a simple read). Redirect it
+    # explicitly to Engram so it switches tools instead of looping.
+    if tool_name == "memory":
+        logger.warning("cobalt-guard: redirected 'memory' -> Engram (task_id=%s)", task_id[:20])
+        return {
+            "action": "block",
+            "message": (
+                "The 'memory' tool is disabled. To PERSIST use 'mcp_engram_mem_save'; "
+                "to RECALL use 'mcp_engram_mem_search'. Engram is the persistence layer. "
+                "Do NOT retry 'memory' — switch to the mcp_engram_* tool now, or just "
+                "continue with the user's request if no save is needed."
+            ),
+        }
+
     logger.warning(
         "cobalt-guard: BLOCKED %s at orchestrator level (task_id=%s). Must delegate.",
         tool_name, task_id[:20],
