@@ -640,6 +640,7 @@ PLUGIN_FILES=(
     "incognito.py"
     "iris_protocol.py"
     "finance_protocol.py"
+    "reconcile.py"
     "iris_capture.py"
     "firewall.py"
     "firewall_tool.py"

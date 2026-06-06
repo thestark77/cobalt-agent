@@ -48,13 +48,15 @@ thin pointers (e.g. "has a Spotify subscription; detail in Firefly bill").
 3. Monthly statement = a RECONCILIATION pass, NOT a second entry path.
 
 # RECONCILIATION (avoid double-counting — critical)
-When a statement is uploaded, for EACH line, match against what was already
-reported (amount + date proximity + merchant):
-- Confident match → mark reconciled, do NOT create a duplicate.
-- No match → it's something unreported (auto-debit, fee, renewal) → propose adding
-  it and confirm.
-- Ambiguous (same amount, different day, or fuzzy merchant) → ASK the user:
-  "¿este cobro de $X del día Y es el mismo que ya reportaste, o uno distinto?"
+When a statement is uploaded: (1) convert it with markitdown, (2) parse the
+lines (amount, date, merchant), (3) fetch the expenses already recorded in
+Firefly for that period, (4) call the `finance_reconcile` tool with both lists.
+Do NOT eyeball the matching — the tool decides deterministically. Act on each
+verdict:
+- match → already recorded, do NOT create a duplicate (skip).
+- new → unreported (auto-debit, fee, renewal) → create it in Firefly (confirm).
+- ambiguous → ASK the user, e.g. "¿este cobro de $X del día Y es el mismo que
+  ya reportaste, o uno distinto?" Never auto-resolve an ambiguous verdict.
 
 # DAILY FOLLOW-UP & ADVICE
 - A daily 21:00 reminder asks if any expense is missing and shows the LAST recorded

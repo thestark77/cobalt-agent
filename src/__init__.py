@@ -582,6 +582,28 @@ def register(ctx):
     except Exception as exc:
         logger.warning("cobalt-incognito: tool registration failed (continuing): %s", exc)
 
+    # Finance: deterministic statement reconciliation matcher. Pure-function
+    # tool — the model passes parsed statement lines + reported Firefly entries
+    # and gets match/new/ambiguous verdicts, so the anti-duplication decision is
+    # made in code. Harmless when Firefly is not wired (the finance protocol
+    # block that tells the model to reconcile is gated off in that case).
+    try:
+        from reconcile import (
+            TOOL_NAME as REC_TOOL_NAME,
+            TOOL_SCHEMA as REC_TOOL_SCHEMA,
+            handle_reconcile,
+        )
+        ctx.register_tool(
+            name=REC_TOOL_NAME,
+            toolset="cobalt",
+            schema=REC_TOOL_SCHEMA,
+            handler=handle_reconcile,
+            description="Reconcile statement lines vs reported expenses (match/new/ambiguous) — anti-duplication",
+            emoji="🧾",
+        )
+    except Exception as exc:
+        logger.warning("cobalt-finance: reconcile tool registration failed (continuing): %s", exc)
+
     # Slash commands: Hermes routes leading-slash messages to the gateway command
     # dispatcher BEFORE the LLM, so /incognito and /secret must be registered here
     # (otherwise they bounce as "Unknown command"). fn(raw_args) -> str.

@@ -22,6 +22,7 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "cobalt_preset",
     "cobalt_firewall",
     "cobalt_incognito",
+    "finance_reconcile",
     "clarify",
     "todo",
     "skills_list",
