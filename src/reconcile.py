@@ -219,7 +219,7 @@ def reconcile_statement(
 
 TOOL_NAME = "finance_reconcile"
 
-TOOL_SCHEMA = {
+_RECONCILE_PARAMS = {
     "type": "object",
     "properties": {
         "lines": {
@@ -256,6 +256,21 @@ TOOL_SCHEMA = {
         },
     },
     "required": ["lines", "reported"],
+}
+
+# Hermes expects the full function-definition shape (name + description +
+# parameters), the same as the other cobalt tools. Passing the raw parameters
+# object instead puts type/properties/required directly under `function`, which
+# the LLM provider rejects ("Extra inputs are not permitted, field
+# 'function.type'") and that poisons the WHOLE tools array — every turn 400s.
+TOOL_SCHEMA = {
+    "name": TOOL_NAME,
+    "description": (
+        "Reconcile uploaded statement lines against already-reported expenses, "
+        "deterministically classifying each as match (already recorded) / new "
+        "(create it) / ambiguous (ask the user). Never silently duplicates."
+    ),
+    "parameters": _RECONCILE_PARAMS,
 }
 
 

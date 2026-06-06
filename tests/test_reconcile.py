@@ -112,6 +112,19 @@ class ReconcileTest(unittest.TestCase):
         self.assertEqual([v.classification for v in verdicts],
                          [rc.MATCH, rc.NEW, rc.AMBIGUOUS])
 
+    def test_tool_schema_has_function_definition_shape(self):
+        # Regression: Hermes/the LLM provider needs {name, description, parameters}.
+        # Passing a raw params object poisons the whole tools array (every turn 400s).
+        self.assertEqual(rc.TOOL_SCHEMA.get("name"), rc.TOOL_NAME)
+        self.assertIn("description", rc.TOOL_SCHEMA)
+        params = rc.TOOL_SCHEMA.get("parameters")
+        self.assertIsInstance(params, dict)
+        self.assertEqual(params.get("type"), "object")
+        self.assertIn("lines", params.get("properties", {}))
+        # the raw schema fields must NOT be at the top level
+        self.assertNotIn("properties", rc.TOOL_SCHEMA)
+        self.assertNotIn("type", rc.TOOL_SCHEMA)
+
     def test_merchant_normalization_strips_noise(self):
         # "compra"/"pos"/digits are noise; core token must still match
         reported = [Txn(20000, "2026-06-01", "Exito")]
