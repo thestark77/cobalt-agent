@@ -680,8 +680,16 @@ header "Step 6/10: SOUL.md + Configuration"
 if [ -f "$COBALT_TMP/SOUL.md" ]; then
     SOUL_DEST="$HERMES_HOME/SOUL.md"
     SOUL_SRC="$COBALT_TMP/SOUL.md"
-    SOUL_RESULT=$("$VENV_DIR/bin/python" - "$SOUL_SRC" "$SOUL_DEST" << 'PYEOF'
-import sys
+    # Deploy-time config (bot email, etc.) lives in a VPS-local env file that is
+    # NOT in the repo, so per-deployment values are never hardcoded in SOUL.md.
+    COBALT_ENV_FILE="$HERMES_HOME/cobalt.env"
+    # shellcheck disable=SC1090
+    [ -f "$COBALT_ENV_FILE" ] && . "$COBALT_ENV_FILE"
+    if [ -z "${COBALT_BOT_EMAIL:-}" ]; then
+        warn "COBALT_BOT_EMAIL not set (create $COBALT_ENV_FILE from cobalt.env.example). SOUL.md will say 'its own Google account'."
+    fi
+    SOUL_RESULT=$(COBALT_BOT_EMAIL="${COBALT_BOT_EMAIL:-}" "$VENV_DIR/bin/python" - "$SOUL_SRC" "$SOUL_DEST" << 'PYEOF'
+import os, sys
 from pathlib import Path
 
 src_path  = Path(sys.argv[1])
@@ -689,11 +697,17 @@ dest_path = Path(sys.argv[2])
 
 START = "<!-- cobalt:managed:start"
 END   = "<!-- cobalt:managed:end -->"
+# Deploy-time placeholder substitution; neutral fallback so the orchestrator
+# prompt never leaks the raw "{{COBALT_BOT_EMAIL}}" token.
+email = os.environ.get("COBALT_BOT_EMAIL", "").strip() or "its own Google account"
+
+def render(text):
+    return text.replace("{{COBALT_BOT_EMAIL}}", email)
 
 new_content = src_path.read_text(encoding="utf-8")
 
 if not dest_path.exists():
-    dest_path.write_text(new_content, encoding="utf-8")
+    dest_path.write_text(render(new_content), encoding="utf-8")
     print("deployed (fresh install)")
     sys.exit(0)
 
@@ -703,7 +717,7 @@ if START not in existing:
     # Old install without tags — back up and deploy fresh (one-time migration)
     bak = dest_path.with_suffix(".md.bak")
     bak.write_text(existing, encoding="utf-8")
-    dest_path.write_text(new_content, encoding="utf-8")
+    dest_path.write_text(render(new_content), encoding="utf-8")
     print(f"deployed (migrated — backup saved to {bak.name})")
     sys.exit(0)
 
@@ -716,12 +730,12 @@ start_new = new_content.find(START)
 end_new   = new_content.find(END)
 if start_new == -1 or end_new == -1:
     # Source lost its tags — deploy as-is (shouldn't happen in normal releases)
-    dest_path.write_text(new_content, encoding="utf-8")
+    dest_path.write_text(render(new_content), encoding="utf-8")
     print("deployed (untagged source)")
     sys.exit(0)
 
 managed_block = new_content[start_new : end_new + len(END)]
-dest_path.write_text(managed_block + user_section, encoding="utf-8")
+dest_path.write_text(render(managed_block + user_section), encoding="utf-8")
 print("merged (cobalt section updated, user additions preserved)")
 PYEOF
     )
