@@ -72,6 +72,21 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_firefly_store_tag",
     "mcp_firefly_update_tag",
     "mcp_firefly_delete_tag",
+    # Karakeep references MCP (Phase 2) — reads + writes so the orchestrator
+    # saves/searches bookmarks directly (no sub-agent hop). Hermes sanitizes the
+    # hyphenated tool names to underscores (create-bookmark -> ...create_bookmark).
+    # The 7 writers are also in incognito.WRITE_TOOLS, so a private turn blocks them.
+    "mcp_karakeep_search_bookmarks",
+    "mcp_karakeep_get_bookmark",
+    "mcp_karakeep_get_bookmark_content",
+    "mcp_karakeep_get_lists",
+    "mcp_karakeep_create_bookmark",
+    "mcp_karakeep_update_bookmark",
+    "mcp_karakeep_create_list",
+    "mcp_karakeep_add_bookmark_to_list",
+    "mcp_karakeep_remove_bookmark_from_list",
+    "mcp_karakeep_attach_tag_to_bookmark",
+    "mcp_karakeep_detach_tag_from_bookmark",
     "clarify",
     "todo",
     "skills_list",

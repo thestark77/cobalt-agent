@@ -72,8 +72,14 @@ WRITE_TOOLS = frozenset({
     "mcp_firefly_store_tag",
     "mcp_firefly_update_tag",
     "mcp_firefly_delete_tag",
-    # NOTE: future organ writers (Karakeep create/update) must be added here as
-    # those MCPs are wired, so incognito also skips them.
+    # Karakeep writers (Phase 2) — a private turn must not create/modify bookmarks.
+    "mcp_karakeep_create_bookmark",
+    "mcp_karakeep_update_bookmark",
+    "mcp_karakeep_create_list",
+    "mcp_karakeep_add_bookmark_to_list",
+    "mcp_karakeep_remove_bookmark_from_list",
+    "mcp_karakeep_attach_tag_to_bookmark",
+    "mcp_karakeep_detach_tag_from_bookmark",
 })
 
 # Safety TTL: a sticky session auto-offs after this many seconds of inactivity,
