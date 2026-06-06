@@ -119,6 +119,22 @@ ORCHESTRATOR_ALLOWED = frozenset({
     "mcp_ghostfolio_add_market_data_points",
     "mcp_ghostfolio_create_activity",
     "mcp_ghostfolio_delete_activity",
+    # Google Calendar MCP (Phase 4, @cocal/google-calendar-mcp) — reads + event
+    # writes direct. The 4 event mutators are also in incognito.WRITE_TOOLS.
+    # Hermes maps hyphens to underscores (list-events -> ...list_events).
+    # Confirm names with `hermes mcp test calendar` after wiring.
+    "mcp_calendar_list_calendars",
+    "mcp_calendar_list_events",
+    "mcp_calendar_get_event",
+    "mcp_calendar_search_events",
+    "mcp_calendar_get_freebusy",
+    "mcp_calendar_get_current_time",
+    "mcp_calendar_list_colors",
+    "mcp_calendar_create_event",
+    "mcp_calendar_update_event",
+    "mcp_calendar_delete_event",
+    "mcp_calendar_respond_to_event",
+    "mcp_calendar_manage_accounts",
     "clarify",
     "todo",
     "skills_list",
