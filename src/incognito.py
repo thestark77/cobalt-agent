@@ -82,6 +82,15 @@ WRITE_TOOLS = frozenset({
     "mcp_karakeep_remove_bookmark_from_list",
     "mcp_karakeep_attach_tag_to_bookmark",
     "mcp_karakeep_detach_tag_from_bookmark",
+    # Ghostfolio writers (Phase 4) — a private turn must not mutate the portfolio.
+    "mcp_ghostfolio_create_account",
+    "mcp_ghostfolio_delete_account",
+    "mcp_ghostfolio_upsert_asset_profile",
+    "mcp_ghostfolio_delete_asset_profile",
+    "mcp_ghostfolio_import_transactions",
+    "mcp_ghostfolio_add_market_data_points",
+    "mcp_ghostfolio_create_activity",
+    "mcp_ghostfolio_delete_activity",
 })
 
 # Safety TTL: a sticky session auto-offs after this many seconds of inactivity,
