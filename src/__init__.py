@@ -370,6 +370,7 @@ def _pre_llm_call_hook(
     note_user_message = None
     build_iris_protocol_block = None
     build_finance_protocol_block = None
+    build_karakeep_protocol_block = None
     build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
@@ -399,6 +400,10 @@ def _pre_llm_call_hook(
         from finance_protocol import build_finance_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: finance_protocol import failed (%s)", exc)
+    try:
+        from karakeep_protocol import build_karakeep_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: karakeep_protocol import failed (%s)", exc)
     iris_maybe_capture = None
     try:
         from iris_capture import maybe_capture as iris_maybe_capture
@@ -478,6 +483,14 @@ def _pre_llm_call_hook(
             finance = build_finance_protocol_block(task_id=task_id)
         except Exception as exc:
             logger.debug("cobalt-finance: build block failed (%s)", exc)
+    # References (Karakeep): self-gated on the karakeep MCP; suppressed on
+    # incognito turns (it carries a save mandate). Reads stay available.
+    karakeep = None
+    if build_karakeep_protocol_block and not turn_incognito:
+        try:
+            karakeep = build_karakeep_protocol_block(task_id=task_id)
+        except Exception as exc:
+            logger.debug("cobalt-karakeep: build block failed (%s)", exc)
     session_id = kwargs.get("session_id", "")
 
     # Deterministic memory capture (fire-and-forget; no-op unless iris is
@@ -501,7 +514,7 @@ def _pre_llm_call_hook(
         triage_ctx = ""  # incognito: drop SDD triage (carries an archive-save mandate, W1)
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance) if p]
+    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}
