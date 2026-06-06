@@ -173,6 +173,12 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # bypassed on demand.
     "mcp_iris_iris_pending_nudges",
     "mcp_iris_iris_record_nudge_outcome",
+    # Obsidian vault export (Phase: digital-brain export). ONE atomic tool that
+    # runs `engram obsidian-export` + Firefly/Ghostfolio/Karakeep enrichment +
+    # zip + Telegram delivery internally. Allowed direct so the orchestrator
+    # calls it in a single shot instead of hand-rolling a vault, exploring disk,
+    # or looping on the disabled `memory` tool (observed failure mode).
+    "mcp_iris_iris_export_vault",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.

@@ -99,6 +99,18 @@ explore for reads), and you MUST copy these constraints into the sub-agent goal:
 - Respect existing busy blocks when proposing times.
 - Times are always ISO 8601 with offset (e.g. 2026-06-10T15:00:00-05:00).
 <!-- cobalt:calendar:end -->
+
+<!-- cobalt:brain-export:start — brain → Obsidian export routing -->
+## Brain export to Obsidian
+When the user asks to export their brain / memory / "todo lo que sabes de mí" /
+"mi cerebro" to Obsidian, a vault, or a zip: call `iris.export_vault`
+(mcp_iris_iris_export_vault) DIRECTLY, in a single tool call. That tool runs
+`engram obsidian-export` + Firefly/Ghostfolio/Karakeep enrichment + zip +
+Telegram delivery internally — it does EVERYTHING. For this task you MUST NOT:
+hand-roll the vault, explore the filesystem, load a generic "obsidian" skill,
+or search memory first. Just call the tool. If the user wants it delivered to a
+specific chat, pass that chat id; otherwise it uses the configured default.
+<!-- cobalt:brain-export:end -->
 <!-- cobalt:managed:end -->
 
 <!-- ── YOUR CUSTOM INSTRUCTIONS ────────────────────────────────────────────────
