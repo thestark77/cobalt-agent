@@ -643,6 +643,7 @@ PLUGIN_FILES=(
     "reconcile.py"
     "karakeep_protocol.py"
     "ghostfolio_protocol.py"
+    "calendar_protocol.py"
     "iris_capture.py"
     "firewall.py"
     "firewall_tool.py"

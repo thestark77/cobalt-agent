@@ -372,6 +372,7 @@ def _pre_llm_call_hook(
     build_finance_protocol_block = None
     build_karakeep_protocol_block = None
     build_ghostfolio_protocol_block = None
+    build_calendar_protocol_block = None
     build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
@@ -409,6 +410,10 @@ def _pre_llm_call_hook(
         from ghostfolio_protocol import build_ghostfolio_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: ghostfolio_protocol import failed (%s)", exc)
+    try:
+        from calendar_protocol import build_calendar_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: calendar_protocol import failed (%s)", exc)
     iris_maybe_capture = None
     try:
         from iris_capture import maybe_capture as iris_maybe_capture
@@ -504,6 +509,14 @@ def _pre_llm_call_hook(
             ghostfolio = build_ghostfolio_protocol_block(task_id=task_id)
         except Exception as exc:
             logger.debug("cobalt-ghostfolio: build block failed (%s)", exc)
+    # Calendar: self-gated on a calendar MCP; suppressed on incognito turns (it
+    # carries event-create mandates). Reads stay available.
+    calendar = None
+    if build_calendar_protocol_block and not turn_incognito:
+        try:
+            calendar = build_calendar_protocol_block(task_id=task_id)
+        except Exception as exc:
+            logger.debug("cobalt-calendar: build block failed (%s)", exc)
     session_id = kwargs.get("session_id", "")
 
     # Deterministic memory capture (fire-and-forget; no-op unless iris is
@@ -527,7 +540,7 @@ def _pre_llm_call_hook(
         triage_ctx = ""  # incognito: drop SDD triage (carries an archive-save mandate, W1)
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio) if p]
+    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio, calendar) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}
