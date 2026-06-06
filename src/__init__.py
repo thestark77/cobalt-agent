@@ -369,6 +369,7 @@ def _pre_llm_call_hook(
     build_convert_first_directive = None
     note_user_message = None
     build_iris_protocol_block = None
+    build_finance_protocol_block = None
     build_context_block = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
@@ -394,6 +395,10 @@ def _pre_llm_call_hook(
         from iris_protocol import build_iris_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: iris_protocol import failed (%s)", exc)
+    try:
+        from finance_protocol import build_finance_protocol_block
+    except ImportError as exc:
+        logger.warning("cobalt-routing: finance_protocol import failed (%s)", exc)
     iris_maybe_capture = None
     try:
         from iris_capture import maybe_capture as iris_maybe_capture
@@ -464,6 +469,15 @@ def _pre_llm_call_hook(
     iris = None
     if build_iris_protocol_block and not turn_incognito:
         iris = build_iris_protocol_block(task_id=task_id)
+    # Finance: same incognito rule as iris — the block carries write mandates
+    # (record transactions in Firefly), which contradict "save nothing". It is
+    # also self-gated: returns None unless the Firefly MCP is configured.
+    finance = None
+    if build_finance_protocol_block and not turn_incognito:
+        try:
+            finance = build_finance_protocol_block(task_id=task_id)
+        except Exception as exc:
+            logger.debug("cobalt-finance: build block failed (%s)", exc)
     session_id = kwargs.get("session_id", "")
 
     # Deterministic memory capture (fire-and-forget; no-op unless iris is
@@ -487,7 +501,7 @@ def _pre_llm_call_hook(
         triage_ctx = ""  # incognito: drop SDD triage (carries an archive-save mandate, W1)
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris) if p]
+    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}

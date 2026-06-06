@@ -639,6 +639,7 @@ PLUGIN_FILES=(
     "markitdown_protocol.py"
     "incognito.py"
     "iris_protocol.py"
+    "finance_protocol.py"
     "iris_capture.py"
     "firewall.py"
     "firewall_tool.py"
