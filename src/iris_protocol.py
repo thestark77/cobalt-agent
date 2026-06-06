@@ -24,8 +24,11 @@ underscores, so these surface as mcp_iris_iris_search, mcp_iris_iris_get_context
 etc. (all underscores — the callable name has no dot).
 """
 
+import json
 import logging
+import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -150,12 +153,69 @@ def build_iris_protocol_block(task_id: str = "") -> Optional[str]:
 
     - Sub-agents: never injected (no task_id prefix needed in goal suffix)
     - Orchestrator: injected only when iris is configured in config.yaml
+
+    When the iris cron has just delivered a proactive nudge out-of-band, an
+    explicit hint (nudge_id + framing) is appended so the orchestrator can
+    record the user's reaction without having to infer there is a pending nudge.
     """
     if task_id and (task_id.startswith("sa-") or task_id.startswith("subagent-")):
         return None
     if not _iris_configured():
         return None
-    return IRIS_PROTOCOL_BLOCK
+    hint = _read_pending_nudge_hint()
+    return IRIS_PROTOCOL_BLOCK + (hint or "")
+
+
+def _read_pending_nudge_hint() -> Optional[str]:
+    """Read the proactive-nudge signal left by the iris cron tick.
+
+    Returns an explicit hint block (with the nudge_id + framing) to append to
+    the protocol, or None when there is no recent pending nudge. FAIL-OPEN:
+    any error (missing file, bad JSON, no iris) yields None — it must never
+    break the turn or affect cobalt when iris is absent.
+    """
+    path = os.environ.get("IRIS_NUDGE_SIGNAL_FILE") or str(
+        Path.home() / ".hermes" / "iris-pending-nudge.json"
+    )
+    try:
+        with open(path, encoding="utf-8") as fh:
+            sig = json.load(fh)
+    except Exception:
+        return None
+
+    nudge_id = sig.get("nudge_id")
+    framing = sig.get("framing", "")
+    if not isinstance(nudge_id, int) or not framing:
+        return None
+
+    # Safety net: ignore stale signals (> 48h) in case an outcome was never
+    # recorded and the marker was never cleared.
+    sent_at = sig.get("sent_at", "")
+    try:
+        if sent_at:
+            ts = datetime.fromisoformat(str(sent_at).replace("Z", "+00:00"))
+            age_hours = (datetime.now(timezone.utc) - ts).total_seconds() / 3600.0
+            if age_hours > 48:
+                return None
+    except Exception:
+        pass  # unparseable timestamp -> still inject (better to record than not)
+
+    framing_clean = str(framing).replace("\n", " ").strip()
+    return (
+        "\n\n# PENDING PROACTIVE NUDGE — act on THIS turn (you sent it out-of-band)\n"
+        f"You recently sent the user this proactive nudge (nudge_id={nudge_id}):\n"
+        f'"{framing_clean}"\n'
+        "If the user's CURRENT message is responding to it in ANY way (agreeing, "
+        "committing, pushing back, deflecting, or acting on it), you MUST record the "
+        "outcome ONCE, silently:\n"
+        '  - infer the outcome: "acted" (engaged / will do it), "rejected" (pushed '
+        'back / unwelcome), or "ignored" (deflected / changed subject)\n'
+        f"  - call mcp_iris_iris_record_nudge_outcome(nudge_id={nudge_id}, "
+        "outcome=<one of those>, feedback=<short paraphrase of their reaction>)\n"
+        "Do NOT call pending_nudges — you already have the id here. NEVER mention "
+        "nudge ids or tools to the user. If the user is clearly NOT responding to it, "
+        "do nothing."
+    )
 
 
 def _iris_configured() -> bool:
