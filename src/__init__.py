@@ -240,6 +240,18 @@ def _pre_tool_call_hook(tool_name: str, args: dict, **kwargs):
             # Fail-open: firewall errors must never break normal operations
             logger.debug("cobalt-firewall: exception (fail-open): %s", exc)
 
+    # --- markitdown auto-conversion (deterministic redirect) ---
+    # Block raw reads of convertible files (PDF/DOCX/XLSX/audio/...) and redirect
+    # to convert_to_markdown. Runs for sub-agents too (they do the actual reads).
+    # Fail-open: any error lets the read proceed normally.
+    try:
+        from markitdown_protocol import intercept_file_read
+        md_block = intercept_file_read(tool_name, args)
+        if md_block is not None:
+            return md_block
+    except Exception as exc:
+        logger.debug("cobalt-markitdown: intercept failed (fail-open): %s", exc)
+
     from tool_guard import check_tool_allowed
     block = check_tool_allowed(tool_name, task_id)
     if block is not None:
@@ -326,6 +338,8 @@ def _pre_llm_call_hook(
     triage_hook = None
     build_memory_protocol_block = None
     build_markitdown_protocol_block = None
+    build_convert_first_directive = None
+    note_user_message = None
     build_iris_protocol_block = None
     build_context_block = None
     try:
@@ -341,7 +355,11 @@ def _pre_llm_call_hook(
             exc,
         )
     try:
-        from markitdown_protocol import build_markitdown_protocol_block
+        from markitdown_protocol import (
+            build_markitdown_protocol_block,
+            build_convert_first_directive,
+            note_user_message,
+        )
     except ImportError as exc:
         logger.warning("cobalt-routing: markitdown_protocol import failed (%s)", exc)
     try:
@@ -369,6 +387,24 @@ def _pre_llm_call_hook(
         )
     memory = build_memory_protocol_block(task_id=task_id) if build_memory_protocol_block else None
     markdown = build_markitdown_protocol_block(task_id=task_id) if build_markitdown_protocol_block else None
+    # Record the human message so the pre_tool_call interception can honor a
+    # per-turn "read it raw" opt-out, then build the proactive convert-first
+    # directive (names any uploaded convertible file so it is converted before
+    # any read attempt). Both are guarded so a failure here never drops the
+    # other protocol blocks (memory/triage/iris) for this turn.
+    if note_user_message is not None:
+        try:
+            note_user_message(user_message)
+        except Exception as exc:
+            logger.debug("cobalt-markitdown: note_user_message failed (%s)", exc)
+    convert_first = None
+    if build_convert_first_directive is not None:
+        try:
+            convert_first = build_convert_first_directive(
+                user_message=user_message, task_id=task_id
+            )
+        except Exception as exc:
+            logger.debug("cobalt-markitdown: convert_first failed (%s)", exc)
     iris = build_iris_protocol_block(task_id=task_id) if build_iris_protocol_block else None
     session_id = kwargs.get("session_id", "")
 
@@ -391,7 +427,7 @@ def _pre_llm_call_hook(
     triage_ctx = (triage or {}).get("context", "") if isinstance(triage, dict) else ""
     # Order matters: PROJECT CONTEXT goes first so the rules it carries are
     # in scope before the triage / memory blocks ask the model to act.
-    parts = [p for p in (project_context, triage_ctx, memory, markdown, iris) if p]
+    parts = [p for p in (project_context, triage_ctx, memory, markdown, convert_first, iris) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}

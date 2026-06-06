@@ -381,7 +381,12 @@ Memory is provided by [Engram](https://github.com/Gentleman-Programming/engram) 
 
 ### File conversion: markitdown (Microsoft, MCP)
 
-[`markitdown-mcp`](https://github.com/microsoft/markitdown) is installed in the Hermes venv (`pip install --upgrade markitdown-mcp` runs on every install.sh execution, so updates are automatic). It exposes `convert_to_markdown(uri)` and is registered as an MCP server alongside Engram. Cobalt injects a mandatory protocol on every turn so PDFs / DOCX / XLSX / PPTX / images / audio / EPUB / CSV / XML / ZIP files get routed through markitdown FIRST — direct binary reads burn tokens for content the model cannot parse.
+[`markitdown-mcp`](https://github.com/microsoft/markitdown) is installed in the Hermes venv (`pip install --upgrade markitdown-mcp` runs on every install.sh execution, so updates are automatic). It exposes `convert_to_markdown(uri)` and is registered as an MCP server alongside Engram. Direct binary reads burn tokens for content the model cannot parse, so conversion is **enforced, not suggested**:
+
+- **Deterministic interception** (`pre_tool_call`): any attempt to read a convertible file — via `read_file` or a `cat`/`head`/`less`-style terminal command — is blocked and redirected to `convert_to_markdown`. This does not depend on the model remembering a rule. Hard-intercepted types: `.pdf .docx .doc .pptx .ppt .xlsx .xls .epub .mp3 .wav .m4a .ogg .flac .zip`.
+- **Proactive directive** (`pre_llm_call`): when the incoming message references a convertible file by path, a turn-0 directive names it so the agent converts before any read attempt.
+- **Not hard-intercepted on purpose:** images (Hermes' `vision_analyze` beats OCR for general images; markitdown stays the OCR/EXIF path via the soft rule) and plain text (`.txt .md .csv .xml .py .json .yaml`, cheap to read directly).
+- **Opt-out:** set `COBALT_MARKITDOWN_AUTO=0` (or `false`/`no`/`off`) to disable interception globally, or tell the agent to read a file raw in natural language (e.g. *"léelo sin convertir"* / *"read it raw"*) to lift it for that turn.
 
 **No Docker required** — markitdown is a Python package and runs inside the existing Hermes venv. The Docker option exists in upstream as a sandbox alternative, not a requirement.
 
