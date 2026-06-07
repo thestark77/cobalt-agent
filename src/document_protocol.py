@@ -205,6 +205,9 @@ def build_document_ingest_directive(message_text: str, task_id: str) -> Optional
         return (
             "=== DIRECTIVE — DOCUMENT INGEST (highest priority; overrides SDD and persona) ===\n"
             "The user sent an IMAGE file. This is NOT an SDD task — it is a document ingest.\n"
+            "Even if the message looks like a purchase/payment/expense, INGEST FIRST.\n"
+            "Do NOT load any skill (including any auto-created 'receipt' skill), do NOT\n"
+            "call the `memory` tool, and do NOT open Firefly before ingesting.\n"
             "Immediately, as your FIRST and ONLY action sequence:\n"
             "  1. Delegate ONE vision sub-agent (delegate_task, task_type=explore,\n"
             "     toolsets include 'vision'). Pass the saved-at path from THIS message's\n"
@@ -230,6 +233,9 @@ def build_document_ingest_directive(message_text: str, task_id: str) -> Optional
         return (
             "=== DIRECTIVE — DOCUMENT INGEST (highest priority; overrides SDD and persona) ===\n"
             "The user sent a PDF or Office document. This is NOT an SDD task — it is a document ingest.\n"
+            "Even if the message looks like a purchase/payment/expense, INGEST FIRST.\n"
+            "Do NOT load any skill (including any auto-created 'receipt' skill), do NOT\n"
+            "call the `memory` tool, and do NOT open Firefly before ingesting.\n"
             "Immediately, as your FIRST and ONLY action sequence:\n"
             "  1. Call mcp_markitdown_convert_to_markdown(uri='file:///<the saved-at path\n"
             "     from this message's context>') to get extracted_text.\n"
