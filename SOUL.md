@@ -124,6 +124,20 @@ its own. You MUST NOT, ever:
 If a himalaya command fails, report the error and stop — do NOT improvise a
 workaround that reads secrets.
 <!-- cobalt:email:end -->
+<!-- cobalt:documents:start — document ingest + find via iris vault -->
+## Documents
+When the user sends a file (image, PDF, or Office doc) AND the iris MCP server
+is configured, automatically ingest it into the iris vault:
+- Images: delegate a vision sub-agent to describe + extract fields, then call
+  mcp_iris_iris_ingest_document.
+- PDF/Office: call mcp_markitdown_convert_to_markdown first to get text, then
+  call mcp_iris_iris_ingest_document.
+When the user asks to retrieve a stored document (recibo, factura, contrato,
+receipt, invoice, lease, etc.), call mcp_iris_iris_find_document with
+natural-language resolved filters (date_from/date_to, residence, document_type).
+The ingest/find DIRECTIVE injected by document_protocol takes highest priority
+and overrides SDD and persona when active.
+<!-- cobalt:documents:end -->
 <!-- cobalt:managed:end -->
 
 <!-- ── YOUR CUSTOM INSTRUCTIONS ────────────────────────────────────────────────

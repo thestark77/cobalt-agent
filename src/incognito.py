@@ -54,6 +54,7 @@ WRITE_TOOLS = frozenset({
     "mcp_iris_iris_record_nudge_outcome",
     "mcp_iris_iris_srs_create_card",
     "mcp_iris_iris_srs_review_card",
+    "mcp_iris_iris_ingest_document",  # document ingest (Phase 5); find is read-only → NOT listed
     # Hermes built-in local notes
     "memory",
     # Firefly III writers (Phase 1) — create/update/delete must be blocked in

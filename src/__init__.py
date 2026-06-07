@@ -408,6 +408,8 @@ def _pre_llm_call_hook(
     build_karakeep_protocol_block = None
     build_ghostfolio_protocol_block = None
     build_context_block = None
+    build_document_ingest_directive = None
+    build_document_find_directive = None
     try:
         from sdd_triage import pre_llm_call_hook as triage_hook
     except ImportError as exc:
@@ -444,6 +446,13 @@ def _pre_llm_call_hook(
         from ghostfolio_protocol import build_ghostfolio_protocol_block
     except ImportError as exc:
         logger.warning("cobalt-routing: ghostfolio_protocol import failed (%s)", exc)
+    try:
+        from document_protocol import (
+            build_document_ingest_directive,
+            build_document_find_directive,
+        )
+    except ImportError as exc:
+        logger.warning("cobalt-routing: document_protocol import failed (%s)", exc)
     iris_maybe_capture = None
     try:
         from iris_capture import maybe_capture as iris_maybe_capture
@@ -567,7 +576,25 @@ def _pre_llm_call_hook(
     export_directive = (
         _build_export_directive(user_message, task_id) if not turn_incognito else None
     )
-    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio, export_directive) if p]
+    # Document directives: ingest (highest) beats find, and both beat export.
+    # Suppressed on incognito turns — ingest is a write op, find is read-only but
+    # the directive block carries no sensitive data; nonetheless suppress both so
+    # an incognito turn never triggers automatic vault writes.
+    ingest_directive = None
+    find_directive = None
+    if not turn_incognito:
+        if build_document_ingest_directive is not None:
+            try:
+                ingest_directive = build_document_ingest_directive(user_message, task_id)
+            except Exception as exc:
+                logger.debug("cobalt-document: ingest directive failed (%s)", exc)
+        if build_document_find_directive is not None:
+            try:
+                find_directive = build_document_find_directive(user_message, task_id)
+            except Exception as exc:
+                logger.debug("cobalt-document: find directive failed (%s)", exc)
+    doc_or_export_directive = ingest_directive or find_directive or export_directive
+    parts = [p for p in (incognito_block, project_context, triage_ctx, memory, markdown, convert_first, iris, finance, karakeep, ghostfolio, doc_or_export_directive) if p]
     if not parts:
         return None
     return {"context": "\n".join(parts)}

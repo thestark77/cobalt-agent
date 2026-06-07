@@ -179,6 +179,10 @@ ORCHESTRATOR_ALLOWED = frozenset({
     # calls it in a single shot instead of hand-rolling a vault, exploring disk,
     # or looping on the disabled `memory` tool (observed failure mode).
     "mcp_iris_iris_export_vault",
+    # Iris document tools (Phase 5) — ingest uploaded files into the vault and
+    # retrieve stored documents by natural-language query.
+    "mcp_iris_iris_ingest_document",
+    "mcp_iris_iris_find_document",
 })
 
 # Prefixes that identify sub-agent task_ids in Hermes.
