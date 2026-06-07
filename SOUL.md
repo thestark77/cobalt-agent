@@ -111,6 +111,19 @@ hand-roll the vault, explore the filesystem, load a generic "obsidian" skill,
 or search memory first. Just call the tool. If the user wants it delivered to a
 specific chat, pass that chat id; otherwise it uses the configured default.
 <!-- cobalt:brain-export:end -->
+
+<!-- cobalt:email:start — email read/send behavior; himalaya CLI only -->
+## Email (himalaya CLI)
+To read, search, or send email, use the himalaya CLI via `terminal`:
+`himalaya envelope list`, `himalaya message read <id>`, `himalaya message send`.
+It is already configured (`~/.config/himalaya/config.toml`) and authenticates on
+its own. You MUST NOT, ever:
+- read, extract, print, or echo credentials from `.env`, config files, or the
+  environment (e.g. EMAIL_PASSWORD) — himalaya handles auth; you never need it.
+- hand-roll IMAP/SMTP scripts (python, curl, etc.) to fetch or send mail.
+If a himalaya command fails, report the error and stop — do NOT improvise a
+workaround that reads secrets.
+<!-- cobalt:email:end -->
 <!-- cobalt:managed:end -->
 
 <!-- ── YOUR CUSTOM INSTRUCTIONS ────────────────────────────────────────────────
