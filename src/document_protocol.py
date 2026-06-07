@@ -143,21 +143,31 @@ _FIND_VERBS = frozenset({
     "encuentra", "busca",
     "dónde está", "donde esta",
     "mándame", "mandame",
-    "muéstrame", "muestrame",
+    "muéstrame", "muestrame", "muéstrame", "mostrame", "muestrame",
+    "dame", "dámelo", "damelo", "dámela", "damela",
+    "envíame", "enviame",
+    "tráeme", "traeme",
+    "quiero", "necesito",
+    "ábreme", "abreme", "abrí", "abre",
     # English
     "find",
     "get me",
     "where is",
     "send me",
     "show me",
+    "give me",
     "look for",
+    "i need", "i want",
+    "open the", "pull up",
 })
 
 _DOC_NOUNS = frozenset({
     # Spanish
     "recibo", "factura", "contrato", "documento", "comprobante", "archivo",
+    "imagen", "foto", "captura", "pantallazo", "soporte", "escaneo",
     # English
     "receipt", "invoice", "lease", "contract", "document", "statement", "file", "pdf",
+    "image", "photo", "picture", "screenshot", "scan",
 })
 
 
@@ -201,11 +211,15 @@ def build_document_ingest_directive(message_text: str, task_id: str) -> Optional
             "     context to the sub-agent goal. Ask it to return structured output:\n"
             "     {description, document_type, extracted_fields(merchant, amount, date,\n"
             "     currency), suggested_name, tags[], residence_hint}.\n"
-            "  2. Call mcp_iris_iris_ingest_document with:\n"
+            "  2. Then YOU (the orchestrator) call mcp_iris_iris_ingest_document\n"
+            "     DIRECTLY — do NOT delegate this call (delegating drops fields).\n"
+            "     Pass:\n"
             "     - file_path: the saved-at path from this message's context\n"
             "     - description, document_type, extracted_fields, suggested_name,\n"
             "       tags from the vision sub-agent's output\n"
-            "     - residence: fill from message context if mentioned, else None\n"
+            "     - residence: if the user names a home/place (e.g. 'casa buga',\n"
+            "       'el apto de medellín'), pass it VERBATIM (iris slugifies it).\n"
+            "       Use None ONLY when no place is mentioned anywhere.\n"
             "iris uses sha256 dedup (force_reprocess defaults False) — do not set it\n"
             "unless the user asks to re-ingest.\n"
             "Read the saved-at path from THIS message's context — do not ask the user\n"
@@ -219,10 +233,14 @@ def build_document_ingest_directive(message_text: str, task_id: str) -> Optional
             "Immediately, as your FIRST and ONLY action sequence:\n"
             "  1. Call mcp_markitdown_convert_to_markdown(uri='file:///<the saved-at path\n"
             "     from this message's context>') to get extracted_text.\n"
-            "  2. Call mcp_iris_iris_ingest_document with:\n"
+            "  2. Then YOU (the orchestrator) call mcp_iris_iris_ingest_document\n"
+            "     DIRECTLY — do NOT delegate this call (delegating drops fields).\n"
+            "     Pass:\n"
             "     - file_path: the saved-at path from this message's context\n"
             "     - extracted_text from convert_to_markdown\n"
-            "     - residence: fill from message context if mentioned, else None\n"
+            "     - residence: if the user names a home/place (e.g. 'casa buga',\n"
+            "       'el apto de medellín'), pass it VERBATIM (iris slugifies it).\n"
+            "       Use None ONLY when no place is mentioned anywhere.\n"
             "iris uses sha256 dedup (force_reprocess defaults False) — do not set it\n"
             "unless the user asks to re-ingest.\n"
             "Read the saved-at path from THIS message's context — do not ask the user\n"
@@ -263,6 +281,11 @@ def build_document_find_directive(user_message: str, task_id: str) -> Optional[s
         "  - document_type: infer from the noun used (recibo→receipt, factura→\n"
         "    invoice, contrato→contract, etc.). Omit if too ambiguous.\n"
         "Omit any filter you cannot confidently resolve (default None).\n"
+        "CRITICAL: you do NOT have the file in context. Even if you recall the\n"
+        "document's details from earlier in THIS conversation, you MUST call the\n"
+        "tool to fetch and DELIVER the actual file. A text summary is NOT a\n"
+        "delivery. NEVER claim you sent or attached a file without calling\n"
+        "mcp_iris_iris_find_document. Call the tool YOURSELF — do not delegate it.\n"
         "Do NOT explore the filesystem, load a skill, or hand-roll a search.\n"
         "=== END DIRECTIVE ==="
     )
