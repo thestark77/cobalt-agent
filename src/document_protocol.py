@@ -95,15 +95,45 @@ def _iris_configured() -> bool:
 _IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"})
 _OFFICE_EXTS = frozenset({".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".epub"})
 
-# ── Gateway note detection regex ─────────────────────────────────────────────
-# Matches: "[The user sent a document/an image ... saved at: <path>]"
-# The capture group "path" gives the saved-at file path for extension
-# classification only — the DIRECTIVE instructs the model to read the path
-# from its own context for the iris call (no brittle path injection in code).
-_DOC_NOTE_RE = re.compile(
-    r"\[The user sent (?:a document|an image)[^\]]*?saved at:\s*(?P<path>[^\]\n]+?)\s*\]",
-    re.IGNORECASE,
+# ── Gateway file-note path anchors ───────────────────────────────────────────
+# Hermes prepends one of three note shapes depending on file type and image
+# input mode (see hermes-agent gateway/run.py + agent/image_routing.py):
+#   - documents:           "...The file is saved at: <path>. Ask the user ...]"
+#   - image (text mode):   "[...use vision_analyze with image_url: <path>]"
+#   - image (native mode): "[Image attached at: <path>]"
+# Each anchor is followed by a whitespace-free cache path. We grab that token
+# and strip trailing punctuation/brackets, then classify by extension. The
+# DIRECTIVE itself tells the model to read the real path from its context, so
+# this extraction is only for presence + type detection (resilient to note
+# format drift / the trailing "Ask the user ..." sentence).
+_PATH_ANCHORS = (
+    re.compile(r"saved at:\s*(?P<path>\S+)", re.IGNORECASE),
+    re.compile(r"image_url:\s*(?P<path>\S+)", re.IGNORECASE),
+    re.compile(r"image attached at:\s*(?P<path>\S+)", re.IGNORECASE),
 )
+_PATH_TRIM = "].,;:!?)>\"'~"
+
+
+def _detect_inbound_file(message_text: str) -> Optional[str]:
+    """Classify an inbound-file gateway note in ``message_text``.
+
+    Returns ``"image"`` or ``"office"`` when an anchor resolves to a path with
+    an ingestable extension; ``None`` otherwise (no note, or a text/audio/zip/
+    unknown file). Scans all anchors so a non-ingestable match (e.g. an audio
+    "saved at:") does not mask a later qualifying note.
+    """
+    text = message_text or ""
+    for rx in _PATH_ANCHORS:
+        m = rx.search(text)
+        if not m:
+            continue
+        path = m.group("path").strip().rstrip(_PATH_TRIM)
+        ext = Path(path).suffix.lower()
+        if ext in _IMAGE_EXTS:
+            return "image"
+        if ext in _OFFICE_EXTS:
+            return "office"
+    return None
 
 # ── Retrieval keyword sets (ES + EN, high-confidence / tight for precision) ──
 _FIND_VERBS = frozenset({
@@ -157,15 +187,8 @@ def build_document_ingest_directive(message_text: str, task_id: str) -> Optional
         return None
     if not _iris_configured():
         return None
-    m = _DOC_NOTE_RE.search(message_text or "")
-    if not m:
-        return None
-    ext = Path(m.group("path")).suffix.lower()
-    if ext in _IMAGE_EXTS:
-        cls = "image"
-    elif ext in _OFFICE_EXTS:
-        cls = "office"
-    else:
+    cls = _detect_inbound_file(message_text)
+    if cls is None:
         return None
 
     if cls == "image":

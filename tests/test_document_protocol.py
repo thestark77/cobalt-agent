@@ -24,78 +24,96 @@ class TestBuildDocumentIngestDirective(unittest.TestCase):
     def tearDown(self):
         dp._CONFIGURED = None
 
-    # --- happy paths ---
+    # --- happy paths (REAL Hermes gateway note formats) ---
+    # Image text-mode note (vision pre-run): description bracket + image_url hint.
+    IMG_TEXT_NOTE = (
+        "[The user sent an image. Here's what I can see:\n"
+        "A utility payment receipt.]\n"
+        "[If you need a closer look, use vision_analyze with "
+        "image_url: /home/sebas/.hermes/cache/images/abc123.jpg]"
+    )
+    # Image native-mode hint (model gets pixels inline).
+    IMG_NATIVE_NOTE = "[Image attached at: /home/sebas/.hermes/cache/images/def456.png]"
+    # Document note: trailing "Ask the user ..." sentence after the path.
+    PDF_NOTE = (
+        "[The user sent a document: 'receipt.pdf'. The file is saved at: "
+        "/home/sebas/.hermes/cache/documents/x_receipt.pdf. "
+        "Ask the user what they'd like you to do with it.]"
+    )
+    DOCX_NOTE = (
+        "[The user sent a document: 'contract.docx'. The file is saved at: "
+        "/home/sebas/.hermes/cache/documents/y_contract.docx. "
+        "Ask the user what they'd like you to do with it.]"
+    )
 
-    def test_image_jpg_fires(self):
-        """Image note with .jpg path triggers an ingest directive."""
-        msg = "[The user sent an image — it was saved at: /home/.hermes/cache/images/abc.jpg]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+    def test_image_text_mode_fires(self):
+        """Real image text-mode note (image_url hint) triggers ingest."""
+        result = dp.build_document_ingest_directive(self.IMG_TEXT_NOTE, "orchestrator-main")
         self.assertIsNotNone(result)
         self.assertIn("vision", result)
         self.assertIn("mcp_iris_iris_ingest_document", result)
 
-    def test_image_png_fires(self):
-        """Image note with .png path triggers an ingest directive."""
-        msg = "[The user sent an image — it was saved at: /tmp/photo.png]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+    def test_image_native_mode_fires(self):
+        """Real image native-mode hint ('[Image attached at: ...]') triggers ingest."""
+        result = dp.build_document_ingest_directive(self.IMG_NATIVE_NOTE, "orchestrator-main")
         self.assertIsNotNone(result)
         self.assertIn("vision", result)
         self.assertIn("mcp_iris_iris_ingest_document", result)
 
     def test_pdf_fires(self):
-        """Document note with .pdf path triggers an ingest directive."""
-        msg = "[The user sent a document — it was saved at: /home/.hermes/cache/documents/receipt.pdf]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+        """Real document note (.pdf, trailing sentence) triggers ingest."""
+        result = dp.build_document_ingest_directive(self.PDF_NOTE, "orchestrator-main")
         self.assertIsNotNone(result)
         self.assertIn("convert_to_markdown", result)
         self.assertIn("mcp_iris_iris_ingest_document", result)
 
     def test_docx_fires(self):
-        """Document note with .docx path triggers an ingest directive."""
-        msg = "[The user sent a document — it was saved at: /tmp/contract.docx]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+        """Real document note (.docx, trailing sentence) triggers ingest."""
+        result = dp.build_document_ingest_directive(self.DOCX_NOTE, "orchestrator-main")
         self.assertIsNotNone(result)
         self.assertIn("convert_to_markdown", result)
         self.assertIn("mcp_iris_iris_ingest_document", result)
 
     def test_directive_has_ingest_header(self):
         """Ingest directive has the correct priority header."""
-        msg = "[The user sent a document — it was saved at: /tmp/report.pdf]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+        result = dp.build_document_ingest_directive(self.PDF_NOTE, "orchestrator-main")
         self.assertIsNotNone(result)
         self.assertIn("DOCUMENT INGEST", result)
 
     # --- guard failures → None ---
 
-    def test_txt_note_returns_none(self):
-        """Plain-text (.txt) note does NOT trigger a directive."""
-        msg = "[The user sent a document — it was saved at: /tmp/notes.txt]"
+    def test_txt_text_document_returns_none(self):
+        """Real text-document note (.txt, 'also saved at:') does NOT trigger."""
+        msg = (
+            "[The user sent a text document: 'notes.txt'. Its content has been "
+            "included below. The file is also saved at: /tmp/notes.txt]"
+        )
         result = dp.build_document_ingest_directive(msg, "orchestrator-main")
         self.assertIsNone(result)
 
     def test_audio_note_returns_none(self):
-        """Audio (.mp3) note does NOT trigger a directive."""
-        msg = "[The user sent a document — it was saved at: /tmp/voice.mp3]"
+        """Real audio note (.mp3, 'It is saved at:') does NOT trigger."""
+        msg = (
+            "[The user sent an audio file attachment: 'voice.mp3'. It is saved "
+            "at: /tmp/voice.mp3. Ask the user what they'd like you to do with it.]"
+        )
         result = dp.build_document_ingest_directive(msg, "orchestrator-main")
         self.assertIsNone(result)
 
     def test_not_configured_returns_none(self):
         """When iris is not configured, no directive is returned."""
         dp._CONFIGURED = False
-        msg = "[The user sent a document — it was saved at: /tmp/receipt.pdf]"
-        result = dp.build_document_ingest_directive(msg, "orchestrator-main")
+        result = dp.build_document_ingest_directive(self.PDF_NOTE, "orchestrator-main")
         self.assertIsNone(result)
 
     def test_subagent_sa_prefix_returns_none(self):
         """Sub-agent task_id with 'sa-' prefix returns None even with valid image note."""
-        msg = "[The user sent an image — it was saved at: /tmp/photo.jpg]"
-        result = dp.build_document_ingest_directive(msg, "sa-1")
+        result = dp.build_document_ingest_directive(self.IMG_TEXT_NOTE, "sa-1")
         self.assertIsNone(result)
 
     def test_subagent_subagent_prefix_returns_none(self):
         """Sub-agent task_id with 'subagent-' prefix returns None."""
-        msg = "[The user sent a document — it was saved at: /tmp/contract.docx]"
-        result = dp.build_document_ingest_directive(msg, "subagent-7")
+        result = dp.build_document_ingest_directive(self.DOCX_NOTE, "subagent-7")
         self.assertIsNone(result)
 
     def test_no_gateway_note_returns_none(self):
